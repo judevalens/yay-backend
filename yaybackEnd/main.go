@@ -42,7 +42,7 @@ func main() {
 
 	http.ListenAndServe(addr,router)
 
-fmt.Printf("hello %v",app)
+	fmt.Printf("hello %v",app)
 
 }
 

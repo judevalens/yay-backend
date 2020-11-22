@@ -51,7 +51,6 @@ func(authenticator *Authenticator) setRoutes(){
 	authenticator.router.HandleFunc("/getFreshToken", authenticator.getFreshTokenHandler).Methods("GET")
 }
 
-
 func (authenticator *Authenticator) loginHandler(response http.ResponseWriter,req *http.Request){
 
 	log.Printf("new login request from %v", req.RemoteAddr)
@@ -82,9 +81,9 @@ func (authenticator *Authenticator) loginHandler(response http.ResponseWriter,re
 
 	userCustomToken , _ :=  authenticator.authClient.CustomToken(ctx, userRecord.UID)
 
-	userRef := authenticator.db.NewRef("user_token")
+	userRef := authenticator.db.NewRef("users")
 
-	r := userRef.Child(userRecord.UID).Set(context.Background(),map[string]interface{}{
+	r := userRef.Child(userRecord.UID).Child("user_token").Set(context.Background(),map[string]interface{}{
 		"access_token": tokenReqRes["access_token"],
 		"refresh_token": tokenReqRes["refresh_token"],
 		"timeStamp": time.Now().UTC().Unix(),
@@ -115,7 +114,7 @@ func (authenticator *Authenticator) getFreshTokenHandler(response http.ResponseW
 
 	var userToken map[string]interface{}
 
-	userTokenErr := authenticator.db.NewRef("user_token").Child(userUUID).Get(context.Background(), &userToken)
+	userTokenErr := authenticator.db.NewRef("users").Child(userUUID).Child("user_token").Get(context.Background(), &userToken)
 
 	if userTokenErr != nil{
 		log.Fatal(userTokenErr)
@@ -184,8 +183,6 @@ func (authenticator *Authenticator) getFreshTokenHandler(response http.ResponseW
 	*/
 
 }
-
-
 func (authenticator *Authenticator) createNewUser(userEmail string) (*auth.UserRecord, error){
 
 	var user = new (auth.UserToCreate)
@@ -288,6 +285,3 @@ func (authenticator *Authenticator) getUserInfo(accessToken string) (map[string]
 
 
 }
-
-
-
