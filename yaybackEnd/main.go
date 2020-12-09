@@ -37,10 +37,15 @@ func main() {
 	log.Printf("getting auth client , error : %v", error)
 
 	var router = mux.NewRouter()
+	router.
 
 	_ = newAuthenticator(authClient, db, router)
 
-	http.ListenAndServe(addr,router)
+	//_ = http.ListenAndServe(addr, router)
+
+	err = http.ListenAndServeTLS(addr, "cert.pem", "key.pem", router)
+	log.Fatal(err)
+
 
 	fmt.Printf("hello %v",app)
 

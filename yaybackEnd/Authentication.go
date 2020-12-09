@@ -79,15 +79,22 @@ func (authenticator *Authenticator) loginHandler(response http.ResponseWriter,re
 		userRecord,_ = authenticator.createNewUser(userEmail)
 	}
 
+
+
 	userCustomToken , _ :=  authenticator.authClient.CustomToken(ctx, userRecord.UID)
 
 	userRef := authenticator.db.NewRef("users")
+
+
 
 	r := userRef.Child(userRecord.UID).Child("user_token").Set(context.Background(),map[string]interface{}{
 		"access_token": tokenReqRes["access_token"],
 		"refresh_token": tokenReqRes["refresh_token"],
 		"timeStamp": time.Now().UTC().Unix(),
 		"expires_in": tokenReqRes["expires_in"],
+		"display_name": userInfo["display_name"],
+		"picture": userInfo["images"],
+		"profile": userInfo["href"],
 	})
 
 	print(r)
@@ -96,6 +103,9 @@ func (authenticator *Authenticator) loginHandler(response http.ResponseWriter,re
 		"access_token" : tokenReqRes["access_token"].(string),
 		"expires_in": strconv.Itoa(int(tokenReqRes["expires_in"].(float64))),
 		"custom_token": userCustomToken,
+		"display_name": userInfo["display_name"].(string),
+		//"picture": (userInfo["images"].(map[string]interface{}))["url"].(string),
+		"profile": userInfo["href"].(string),
 	}
 	loginResponseJSONText, _ := json.Marshal(loginResponse)
 
@@ -121,9 +131,11 @@ func (authenticator *Authenticator) getFreshTokenHandler(response http.ResponseW
 	}
 	log.Printf("refresh token - user was found, UUID : %v", userToken)
 
+
 	refreshToken := userToken["refresh_token"].(string)
 
 	refreshTokenMap , _ := authenticator.getRefreshToken(refreshToken)
+
 
 
 	refreshTokenByte, _ := json.Marshal(refreshTokenMap)
@@ -132,55 +144,6 @@ func (authenticator *Authenticator) getFreshTokenHandler(response http.ResponseW
 	log.Printf("sending refreshed token to client \n %v", len(refreshTokenByte))
 
 	response.Write(refreshTokenByte)
-
-/*
-	json.Unmarshal(rawBody, &loginBody)
-
-	tokenReqRes, tokenReqErr := authenticator.getToken(loginBody.Code)
-	accessToken := tokenReqRes["access_token"].(string)
-
-	if tokenReqErr != nil {
-		log.Fatal(tokenReqErr)
-	}
-
-
-	userInfo, _ := authenticator.getUserInfo(accessToken)
-
-	userEmail :=  userInfo["email"].(string)
-
-
-	userRecord, _ := authenticator.authClient.GetUserByEmail(context.Background(),userEmail)
-
-	if userRecord == nil {
-		userRecord,_ = authenticator.createNewUser(userEmail)
-	}
-
-	userCustomToken , _ :=  authenticator.authClient.CustomToken(ctx, userRecord.UID)
-
-	userRef := authenticator.db.NewRef("users")
-
-	r := userRef.Child(userRecord.UID).Set(context.Background(),map[string]interface{}{
-		"access_token": tokenReqRes["access_token"],
-		"refresh_token": tokenReqRes["refresh_token"],
-		"timeStamp": time.Now().UTC().Unix(),
-		"expires_in": tokenReqRes["expires_in"],
-	})
-
-	print(r)
-
-	loginResponse := map[string]string{
-		"access_token" : tokenReqRes["access_token"].(string),
-		"expires_in": tokenReqRes["expires_in"].(string),
-		"custom_token": userCustomToken,
-	}
-	loginResponseJSONText, _ := json.Marshal(loginResponse)
-
-	response.Header().Add("Content-Type","application/json")
-	response.Header().Add("Content-Length", strconv.Itoa(len(loginResponseJSONText)))
-
-	response.WriteHeader(200)
-	response.Write(loginResponseJSONText)
-	*/
 
 }
 func (authenticator *Authenticator) createNewUser(userEmail string) (*auth.UserRecord, error){
@@ -285,3 +248,4 @@ func (authenticator *Authenticator) getUserInfo(accessToken string) (map[string]
 
 
 }
+
