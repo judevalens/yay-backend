@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
+	"yaybackEnd/auth"
 
 	firebase "firebase.google.com/go"
 	_ "firebase.google.com/go/auth"
@@ -37,9 +38,8 @@ func main() {
 	log.Printf("getting auth client , error : %v", error)
 
 	var router = mux.NewRouter()
-	router.
 
-	_ = newAuthenticator(authClient, db, router)
+	_ = auth.NewAuthenticator(authClient, db, router)
 
 	//_ = http.ListenAndServe(addr, router)
 
