@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
+	"yaybackEnd/artistManager"
 	"yaybackEnd/auth"
 
 	firebase "firebase.google.com/go"
@@ -21,8 +22,6 @@ DatabaseURL: "https://yay-music.firebaseio.com/",
 }
 func main() {
 
-
-
 	app, err := firebase.NewApp(context.Background(), conf)
 	if err != nil {
 		log.Fatalf("error initializing app: %v\n", err)
@@ -31,7 +30,9 @@ func main() {
 
 	db, dbError := app.Database(ctx)
 
-	if dbError != nil{
+	fireStoreDB, fireStoreDBErr := app.Firestore(ctx)
+
+	if dbError != nil && fireStoreDBErr != nil{
 		log.Fatal(dbError)
 	}
 
@@ -39,7 +40,9 @@ func main() {
 
 	var router = mux.NewRouter()
 
-	_ = auth.NewAuthenticator(authClient, db, router)
+	authenticator := auth.NewAuthenticator(authClient, db,fireStoreDB, ctx, router)
+
+	_ = artistManager.GetArtistManger(authClient, db,fireStoreDB, ctx, authenticator, router)
 
 	//_ = http.ListenAndServe(addr, router)
 
