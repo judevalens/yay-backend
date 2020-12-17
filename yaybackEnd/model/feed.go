@@ -1,21 +1,21 @@
 package model
 
-import "cloud.google.com/go/firestore"
-
-type TweetFeed struct {
+type TwitterFeed struct {
 	ownerID string
-	db firestore.Client
+	TweetFeedRepositoryI
 }
 
-func NewTweetFeed(db firestore.Client) *TweetFeed {
-	newTweetFeed := new (TweetFeed)
-	newTweetFeed.db = db
+func NewTweetFeed(tweetFeedRepository TweetFeedRepositoryI) *TwitterFeed {
+	newTweetFeed := new (TwitterFeed)
+	newTweetFeed.TweetFeedRepositoryI = tweetFeedRepository
 	return newTweetFeed
 }
 
-type TweetFeedRepository interface {
+type TweetFeedRepositoryI interface {
 	 GetFeed(feedID string)
-	 SetGreatestID(greatestID string)
+	 AddTweet(tweet map[string]interface{})
+	 GreatestID(greatestID string)
+	 GetTweets()
 }
 
 
