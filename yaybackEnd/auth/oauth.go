@@ -1,11 +1,13 @@
-package misc
+package auth
 
 import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func OauthSignature(method ,baseUrl , appSecret, userSecret string,params url.Values, authParams url.Values)(string,string){
@@ -24,7 +26,7 @@ func OauthSignature(method ,baseUrl , appSecret, userSecret string,params url.Va
 		encodedParamsString +=param
 	}
 
-	signatureBaseString := method+"&"+percentEncode(baseUrl)+"&"+percentEncode(encodedParamsString)
+	signatureBaseString := method+"&"+ percentEncode(baseUrl)+"&"+ percentEncode(encodedParamsString)
 
 	signingKey := percentEncode(appSecret) + "&" + percentEncode(userSecret)
 
@@ -43,7 +45,7 @@ func OauthSignature(method ,baseUrl , appSecret, userSecret string,params url.Va
 
 	authParams["oauth_signature"] = []string{b64code}
 
-	return b64code,GetAuthString(authParams)
+	return b64code, GetAuthString(authParams)
 
 }
 
@@ -58,7 +60,7 @@ func encodeMap(encodedParams []string,params url.Values) []string{
 		v := url.Values{}
 		v.Add(paramKey,paramValue[0])
 
-		encodedParam := percentEncode(paramKey)+"="+percentEncode(paramValue[0])
+		encodedParam := percentEncode(paramKey)+"="+ percentEncode(paramValue[0])
 		i := -1
 		for j, param := range encodedParams {
 			if encodedParam < param{
@@ -87,10 +89,28 @@ func GetAuthString(oauthParams url.Values)string{
 	oauthHeader := "OAuth "
 
 	for key, value := range oauthParams {
-		oauthHeader += key+"=\""+percentEncode(value[0])+"\","
+		oauthHeader += key+"=\""+ percentEncode(value[0])+"\","
 	}
 
 	return strings.TrimSuffix(oauthHeader,",")
 
+}
+
+func GetAuthParams(params map[string]string) url.Values{
+	oauthParams := url.Values{}
+	if params != nil {
+		for key, value := range params {
+			oauthParams.Add(key,value)
+		}
+	}
+
+	oauthParams.Add("oauth_consumer_key", TwitterApiKey)
+	oauthParams.Add("oauth_nonce", strconv.FormatInt(time.Now().Unix(), 10))
+	oauthParams.Add("oauth_version", "1.0")
+	oauthParams.Add("oauth_signature_method", "HMAC-SHA1")
+	oauthParams.Add("oauth_version", "1.0")
+	oauthParams.Add("oauth_timestamp", strconv.FormatInt(time.Now().Unix(), 10))
+
+	return oauthParams
 }
 

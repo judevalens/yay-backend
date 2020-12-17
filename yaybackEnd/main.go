@@ -1,5 +1,6 @@
 package main
 import (
+	"cloud.google.com/go/firestore"
 	"context"
 	"fmt"
 	"github.com/gorilla/mux"
@@ -20,6 +21,20 @@ var ctx = context.Background()
 var conf = &firebase.Config{
 DatabaseURL: "https://yay-music.firebaseio.com/",
 }
+
+type App struct {
+	router mux.Router
+	fireStore firestore.Client
+}
+
+func (a App) getSubRouter(nameSpace string) *mux.Router {
+	panic("implement me")
+}
+
+func (a App) setHandler(path string, handlerFunc http.HandlerFunc) {
+	panic("implement me")
+}
+
 func main() {
 
 	app, err := firebase.NewApp(context.Background(), conf)

@@ -14,8 +14,6 @@ import (
 	"strconv"
 	"time"
 	auth2 "yaybackEnd/auth"
-	"yaybackEnd/job_queue"
-	"yaybackEnd/misc"
 )
 
 const (
@@ -23,93 +21,7 @@ const (
 	retrieveArtistFeed = 1
 )
 
-type ArtistSelectionWorker struct {
-	jobType          int
-	oldestTimeStamp  int
-	artistFeedPuller *job_queue.WorkerPool
-	stopPulling      bool
-	stopPollingChan  chan bool
-	artistManager *ArtistManager
-}
 
-func (a ArtistSelectionWorker) startSelection() {
-	i := 0
-	a.artistFeedPuller.Start()
-	for i < 1 {
-		a.artistFeedPuller.AddJob(true)
-		a.stopPollingChan <- true
-		i++
-	}
-
-}
-func  NewArtistSelectionWorker(manager *ArtistManager) *ArtistSelectionWorker {
-	artistSelectionWorker := ArtistSelectionWorker{}
-	artistSelectionWorker.artistFeedPuller = job_queue.NewWorkerPool(&artistSelectionWorker, 1, 2)
-	artistSelectionWorker.stopPollingChan = make(chan bool, 100)
-	log.Printf("manager %v\n",manager.fireStoreDB)
-	artistSelectionWorker.artistManager = manager
-	return &artistSelectionWorker
-}
-
-func (a *ArtistSelectionWorker) Worker(id int, job interface{}) {
-	for {
-		select {
-		case poll := <-a.stopPollingChan:
-			if poll {
-				a.selectArtists()
-			}
-		case <-time.After(time.Second * 30):
-			a.selectArtists()
-		}
-	}
-}
-// TODO : there is a better to select the feeds that need to be retrieved !
-func (a *ArtistSelectionWorker) selectArtists() {
-	log.Printf("pulling feed : %v...",a.artistManager)
-//	a.stopPollingChan <- false
-	log.Printf("pulling feed done...")
-
-		artistsRef := a.artistManager.fireStoreDB.Collection("artists_feed_retrieval_queue").Where("state", "==", "done").Where("last_fetch", "<=", time.Now().Unix()-int64((time.Second*120).Seconds())).Limit(50)
-		_ = a.artistManager.fireStoreDB.RunTransaction(a.artistManager.ctx, func(ctx context.Context, transaction *firestore.Transaction) error {
-			artistsFeedQueue := transaction.Documents(artistsRef)
-
-			selectedArtist, selectedArtistErr := artistsFeedQueue.GetAll()
-
-			if selectedArtistErr != nil{
-				log.Fatal(selectedArtistErr)
-			}
-
-			nSelectedArtist := len(selectedArtist)
-
-			log.Printf("%v artists were retrived",nSelectedArtist)
-
-			a.artistManager.artistSelectionWorker.stopPollingChan <- nSelectedArtist >= 50
-
-
-
-			for _, artistFetchStateSnapShot := range selectedArtist{
-				addedToQueue := a.artistManager.workerPool.AddJob(artistFetchStateSnapShot)
-
-				if addedToQueue {
-					log.Printf("updating state....")
-					_ = transaction.Update(artistFetchStateSnapShot.Ref, []firestore.Update{
-						{
-							Path:  "last_fetch",
-							Value: time.Now().Unix(),
-						},
-						{
-							Path:  "state",
-							Value: "queued",
-						},
-					})
-				}else{
-					log.Printf("failed to update state")
-				}
-			}
-
-			return nil
-		})
-}
 
 type ArtistManager struct {
 	authClient            *auth.Client
@@ -119,13 +31,11 @@ type ArtistManager struct {
 	httpClient            http.Client
 	ctx                   context.Context
 	artistSelectionWorker *ArtistSelectionWorker
-	workerPool            *job_queue.WorkerPool
+	FeedPoller            *FeedPoller
+	ContentDispatcher		*ContentDispatcher
 	authenticator         *auth2.Authenticator
 }
 
-func (artistManager *ArtistManager) Worker(id int, job interface{}) {
-
-}
 
 func GetArtistManger(_authClient *auth.Client, _db *db.Client, _fireStoreDB *firestore.Client, _ctx context.Context, _authenticator *auth2.Authenticator, router *mux.Router) *ArtistManager {
 	newArtistManager := ArtistManager{}
@@ -134,9 +44,9 @@ func GetArtistManger(_authClient *auth.Client, _db *db.Client, _fireStoreDB *fir
 	newArtistManager.ctx = _ctx
 	newArtistManager.router = router
 	newArtistManager.authenticator = _authenticator
-	newArtistManager.workerPool = job_queue.NewWorkerPool(&newArtistManager, 50, 1000)
 	newArtistManager.artistSelectionWorker =NewArtistSelectionWorker(&newArtistManager)
-	newArtistManager.workerPool.Start()
+	newArtistManager.FeedPoller = NewFeedPoller(&newArtistManager)
+	newArtistManager.ContentDispatcher = NewContentDispatcher(&newArtistManager)
 	newArtistManager.artistSelectionWorker.startSelection()
 	newArtistManager.setRoutes()
 
@@ -259,7 +169,7 @@ func (artistManager *ArtistManager) followArtist(artistSpotifyObject map[string]
 	oauthParams.Add("oauth_token", twitterUserOauthToken)
 	oauthParams.Add("oauth_timestamp", strconv.FormatInt(time.Now().Unix(), 10))
 
-	_, oauthHeader := misc.OauthSignature("GET", twitterArtistSearchUrl, auth2.TwitterSecretKey, twitterUserOauthTokenSecret, params, oauthParams)
+	_, oauthHeader := auth2.OauthSignature("GET", twitterArtistSearchUrl, auth2.TwitterSecretKey, twitterUserOauthTokenSecret, params, oauthParams)
 
 	artistReq, _ := http.NewRequest("GET", twitterArtistSearchUrl, nil)
 
@@ -284,21 +194,18 @@ func (artistManager *ArtistManager) followArtist(artistSpotifyObject map[string]
 	artistDocs := artistManager.fireStoreDB.Collection("artists").Doc(artistSpotifyID)
 	artistDocSnapShot, _ := artistDocs.Get(artistManager.ctx)
 	entryExists := artistDocSnapShot.Exists()
-
-
-
-
-
+	
 	if !entryExists {
 
-		_, _, addToQueueErr := artistManager.fireStoreDB.Collection("artists_feed_retrieval_queue").Add(artistManager.ctx,
+		artistDocRef := artistManager.fireStoreDB.Collection("artists_feed_retrieval_queue").Doc(artistSpotifyID)
+
+		_, addToQueueErr := artistDocRef.Set(artistManager.ctx,
 			map[string]interface{}{
 
-				"id" : artistSpotifyID,
+				"spotifyID":  artistSpotifyID,
 				"last_fetch": time.Now().Unix(),
-				"state": "done",
-				"twitterID":twitterArtistObject["id"],
-
+				"state":      "done",
+				"twitterID":  twitterArtistObject["id_str"].(string),
 			})
 
 		if addToQueueErr != nil{
@@ -323,4 +230,14 @@ func (artistManager *ArtistManager) followArtist(artistSpotifyObject map[string]
 	log.Printf("new artist found: \n%v\n\n", string(searchedArtistBytes))
 
 	return true
+}
+
+
+func (artistManager *ArtistManager) Worker(id int, job interface{}) {
+
+}
+
+
+func(artistManager *ArtistManager) pullFeed(){
+
 }
