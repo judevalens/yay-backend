@@ -76,6 +76,7 @@ func (u UserFireStoreRepository) GetUserTwitterOauth(uuid string) (string, strin
 
 func (u UserFireStoreRepository) AddUser(user model.User) error {
 	_, writeError := u.db.Collection("users").Doc(user.GetUserUUID()).Set(context.Background(), map[string]interface{}{
+		"id":  user.GetUserUUID(),
 		"spotify_account": map[string]interface{}{
 			"access_token": user.SpotifyAccount["access_token"],
 			"refresh_token": user.SpotifyAccount["refresh_token"],

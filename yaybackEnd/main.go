@@ -58,7 +58,13 @@ func main() {
 	authManagerRepository := repository.NewUserFireStoreRepository(fireStoreDB,ctx)
 	authManager := app2.NewAuthManager(authClient,http.Client{},ctx,authManagerRepository)
 
+	relationManagerRepository := repository.NewRelationsFireStoreRepository(fireStoreDB,ctx)
+	relationManager := app2.NewRelationManager(http.Client{},authManager,relationManagerRepository)
+
+
 	_ = api.NewAuthApi(router,authManager)
+
+	_ = api.NewRelationApi(router,relationManager)
 
 	router.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 	log.Printf("test")

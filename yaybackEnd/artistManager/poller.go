@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"time"
 	auth2 "yaybackEnd/auth"
+	"yaybackEnd/helpers"
 	"yaybackEnd/job_queue"
 )
 
@@ -187,7 +188,7 @@ func (f *FeedPoller) poll(artist interface{}) (map[string]interface{}, []map[str
 
 	params.Add("user_id", artistTwitterID)
 
-	_, oauthHeader := auth2.OauthSignature("GET", twitterTimeLineUrl, auth2.TwitterSecretKey, "", params, auth2.GetAuthParams(nil))
+	_, oauthHeader := helpers.OauthSignature("GET", twitterTimeLineUrl, auth2.TwitterSecretKey, "", params, helpers.GetAuthParams(nil))
 
 	artistTimeLineReq, artistTimeLineReqErr_ := http.NewRequest("GET", twitterTimeLineUrl, nil)
 	artistTimeLineReq.Header.Add("Authorization", oauthHeader)
