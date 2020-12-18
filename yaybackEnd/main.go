@@ -6,8 +6,9 @@ import (
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
-	"yaybackEnd/artistManager"
-	"yaybackEnd/auth"
+	"yaybackEnd/api"
+	app2 "yaybackEnd/app"
+	"yaybackEnd/repository"
 
 	firebase "firebase.google.com/go"
 	_ "firebase.google.com/go/auth"
@@ -43,7 +44,7 @@ func main() {
 	}
 	authClient, error := app.Auth(ctx)
 
-	db, dbError := app.Database(ctx)
+	_, dbError := app.Database(ctx)
 
 	fireStoreDB, fireStoreDBErr := app.Firestore(ctx)
 
@@ -54,10 +55,18 @@ func main() {
 	log.Printf("getting auth client , error : %v", error)
 
 	var router = mux.NewRouter()
+	authManagerRepository := repository.NewUserFireStoreRepository(fireStoreDB,ctx)
+	authManager := app2.NewAuthManager(authClient,http.Client{},ctx,authManagerRepository)
 
-	authenticator := auth.NewAuthenticator(authClient, db,fireStoreDB, ctx, router)
+	_ = api.NewAuthApi(router,authManager)
 
-	_ = artistManager.GetArtistManger(authClient, db,fireStoreDB, ctx, authenticator, router)
+	router.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+	log.Printf("test")
+	})
+
+	//authenticator := auth.NewAuthenticator(authClient, db,fireStoreDB, ctx, router)
+
+//	_ = artistManager.GetArtistManger(authClient, db,fireStoreDB, ctx, authenticator, router)
 
 	//_ = http.ListenAndServe(addr, router)
 

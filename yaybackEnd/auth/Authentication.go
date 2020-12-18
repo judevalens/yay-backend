@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"yaybackEnd/misc"
 )
 
 const EmailParam = "userEmail"
@@ -340,7 +341,7 @@ func (authenticator *Authenticator) geTwitterRequestToken(response http.Response
 		"oauth_timestamp":         []string{strconv.FormatInt(time.Now().Unix(),10)},
 	}
 
-	signature,oauthHeader := OauthSignature("POST",twitterRequestTokenURL,TwitterSecretKey,"",tokenRequestParams,oauthParams)
+	signature,oauthHeader := misc.OauthSignature("POST",twitterRequestTokenURL,TwitterSecretKey,"",tokenRequestParams,oauthParams)
 
 	tokenRequest.Header.Add("Authorization", oauthHeader)
 	requestedToken, _ := authenticator.httpClient.Do(tokenRequest)

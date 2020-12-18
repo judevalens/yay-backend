@@ -1,25 +1,336 @@
 package app
 
-import "yaybackEnd/model/user"
-type AuthManager struct {
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"firebase.google.com/go/auth"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
+	"yaybackEnd/misc"
+	"yaybackEnd/model/user"
+	"go.uber.org/zap"
+)
 
+const (
+	SpotifyAccessTokenRedirectUri = "http://com.example.yay/"
+	SpotifyClientId               = "c32f7f7b46e14062ba2aea1b462415c9"
+	SpotifyClientSecret           = "4bf8bb4cb9964ec8bb9d900bc9bc5fb3"
+)
+
+const (
+	TwitterApiKey        = "9OTPANWh0sX2TmBqSz3IG1WQa"
+	TwitterSecretKey     = "6Jil7rakvEFzhslXxxCuM8Szf8ZC6qUQmNK6dbMSjCNNK6qwuD"
+	TwitterBearerToken   = "AAAAAAAAAAAAAAAAAAAAANPdKQEAAAAAXkg3AHAmFBW8OpZlV1LNy5nDHbg%3D7Spe4lgo4cFqabdV12XHKPn28H4k9esKo9znQkXDeZoNSBOGWz"
+	TwitterAccessToken   = "2919369773-YRHJGm5S5IqXqN6S61k9jU5f5oIqDXazARzEYFo"
+	TwitterAccessSecret  = "B7P71NG4Bk5oVfVlYL5wpU8VShwRDoddYEKGz1FX3KReE"
+	TwitterOauthCallBack = "https://127.0.0.1/twitterCallback/"
+)
+
+
+
+type AuthManager struct {
+	authClient *auth.Client
+	httpClient http.Client
+	ctx        context.Context
+	logger *zap.Logger
+	AuthManagerRepository
+}
+
+func NewAuthManager(authClient *auth.Client,httpClient http.Client, ctx context.Context,repository AuthManagerRepository) *AuthManager{
+	newAuthManager := new(AuthManager)
+
+	logger, _ := zap.NewDevelopment()
+
+	logger.Sugar()
+
+	newAuthManager.ctx = ctx
+	newAuthManager.httpClient= httpClient
+	newAuthManager.authClient = authClient
+	newAuthManager.AuthManagerRepository = repository
+	return newAuthManager
+
+}
+
+func (authenticator *AuthManager) AuthenticateUser(spotifyAccountData, twitterAccountData map[string]interface{}) (map[string]interface{}, error) {
+
+	userEmail := spotifyAccountData["user_email"].(string)
+
+userRecord, userRecordErr := authenticator.authClient.GetUserByEmail(authenticator.ctx,userEmail)
+
+	if userRecord == nil{
+		userRecord, userRecordErr = authenticator.createNewUser(userEmail)
+	}
+
+	if userRecordErr != nil{
+		// TODO need to handle error
+		log.Fatal(userRecordErr)
+	}
+
+	user := user.NewUser(userRecord.UID,spotifyAccountData,twitterAccountData)
+
+	userIsAdded := authenticator.AddUser(*user)
+	if userIsAdded != nil{
+		return nil, errors.New("failed register user")
+	}
+	customToken, customTokenErr := authenticator.authClient.CustomToken(authenticator.ctx, user.GetUserUUID())
+
+	if customTokenErr != nil {
+		return nil, errors.New("failed to create custom token")
+
+	}
+	return map[string]interface{}{
+		"status_code":  200,
+		"custom_token": customToken,
+	}, nil
+
+}
+
+
+func (authenticator *AuthManager)createNewUser(userSpotifyEmail string)(*auth.UserRecord,error){
+	var user = new(auth.UserToCreate)
+	user.Email(userSpotifyEmail).EmailVerified(true)
+	return authenticator.authClient.CreateUser(context.Background(), user)
+}
+
+
+func (authenticator *AuthManager) LoginWithSpotify(spotifyRecCode string) (map[string]interface{}, error) {
+	tokenReqRes, tokenReqErr := authenticator.RequestSpotifyAccessToken(spotifyRecCode)
+	accessToken := tokenReqRes["access_token"].(string)
+	userInfo, _ := authenticator.RequestSpotifyUserInfo(accessToken)
+
+	if tokenReqErr != nil {
+		log.Printf("access token request err : %v", tokenReqErr)
+		return nil, tokenReqErr
+	}
+
+	return map[string]interface{}{
+		"status_code":      200,
+		"access_token":     tokenReqRes["access_token"].(string),
+		"refresh_token":    tokenReqRes["refresh_token"].(string),
+		"expires_in":       tokenReqRes["expires_in"].(float64),
+		"display_name":     userInfo["display_name"].(string),
+		"token_time_stamp": tokenReqRes["token_time_stamp"],
+		"user_email":       userInfo["email"].(string),
+		//"picture": (userInfo["images"].(map[string]interface{}))["url"].(string),
+		"profile": userInfo["href"].(string),
+	}, nil
+}
+
+func (authenticator *AuthManager) RequestSpotifyAccessToken(code string) (map[string]interface{}, error) {
+	tokenReqURL := "https://accounts.spotify.com/api/token"
+	print(code)
+	tokenReqBody := url.Values{}
+	tokenReqBody.Add("code", code)
+	tokenReqBody.Add("grant_type", "authorization_code")
+	tokenReqBody.Add("redirect_uri", SpotifyAccessTokenRedirectUri)
+	tokenReqBody.Add("client_id", SpotifyClientId)
+	tokenReqBody.Add("client_secret", SpotifyClientSecret)
+
+	tokenReq, _ := http.NewRequest("POST", tokenReqURL, strings.NewReader(tokenReqBody.Encode()))
+	tokenReq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	tokenReq.Header.Add("Content-Length", strconv.Itoa(len(tokenReqBody.Encode())))
+	log.Printf("body :\n%v", tokenReqBody.Encode())
+
+	tokenReqResponse, _ := authenticator.httpClient.Do(tokenReq)
+
+	resBody, _ := ioutil.ReadAll(tokenReqResponse.Body)
+
+	log.Printf("token response , status code %v,  body : %v", tokenReqResponse.StatusCode, string(resBody))
+	if tokenReqResponse.StatusCode == 200 {
+		var tokenResponse interface{}
+		json.Unmarshal(resBody, &tokenResponse)
+		tokenResponseMap := tokenResponse.(map[string]interface{})
+		tokenResponseMap["token_time_stamp"] = time.Now().Unix()
+		return tokenResponseMap, nil
+	} else {
+		return nil, errors.New("failed")
+	}
+}
+
+func (authenticator *AuthManager) GetAccessToken(user *user.User) (map[string]interface{}, error) {
+
+	if (time.Now().Unix() - user.GetSpotifyAccount()["token_time_stamp"].(int64)) > (int64(time.Second * 55)) {
+		refreshedAccessTokenMap, refreshedTokenErr := authenticator.RequestSpotifyRefreshedAccessToken(user.GetSpotifyAccount()["refresh_token"].(string))
+
+		if refreshedTokenErr != nil {
+			log.Fatal(refreshedTokenErr)
+			return nil, refreshedTokenErr
+
+		}
+		user.UpdateSpotifyOauthInfo(refreshedAccessTokenMap["access_token"].(string), refreshedAccessTokenMap["token_time_stamp"].(int64))
+
+		return refreshedAccessTokenMap, nil
+	} else {
+		return user.GetSpotifyAccount(), nil
+	}
+}
+
+func (authenticator *AuthManager) RequestSpotifyRefreshedAccessToken(refreshToken string) (map[string]interface{}, error) {
+
+	tokenReqURL := "https://accounts.spotify.com/api/token"
+
+	tokenReqBody := url.Values{}
+	tokenReqBody.Add("refresh_token", refreshToken)
+	tokenReqBody.Add("grant_type", "refresh_token")
+	tokenReqBody.Add("client_id", SpotifyClientId)
+	tokenReqBody.Add("client_secret", SpotifyClientSecret)
+
+	tokenReq, _ := http.NewRequest("POST", tokenReqURL, strings.NewReader(tokenReqBody.Encode()))
+
+	tokenReq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	tokenReq.Header.Add("Content-Length", strconv.Itoa(len(tokenReqBody.Encode())))
+
+	authorizationCode := SpotifyClientId + ":" + SpotifyClientSecret
+	authorizationCodeB64 := "Basic " + base64.StdEncoding.EncodeToString([]byte(authorizationCode))
+	tokenReq.Header.Add("Authorization", authorizationCodeB64)
+
+	log.Printf("body :\n%v", tokenReqBody.Encode())
+
+	tokenReqResponse, _ := authenticator.httpClient.Do(tokenReq)
+
+	resBody, _ := ioutil.ReadAll(tokenReqResponse.Body)
+
+	log.Printf("token response , status code %v,  body : %v", tokenReqResponse.StatusCode, string(resBody))
+	if tokenReqResponse.StatusCode == 200 {
+		var tokenResponse interface{}
+		json.Unmarshal(resBody, &tokenResponse)
+		tokenResponseMap := tokenResponse.(map[string]interface{})
+		tokenResponseMap["token_time_stamp"] = time.Now().Unix()
+		return tokenResponseMap, nil
+	} else {
+		return nil, errors.New("failed")
+	}
+}
+
+func (authenticator *AuthManager) RequestSpotifyUserInfo(accessToken string) (map[string]interface{}, error) {
+	url := "https://api.spotify.com/v1/me"
+	authorizationHeader := "Bearer " + accessToken
+
+	userProfileReq, _ := http.NewRequest("GET", url, nil)
+	userProfileReq.Header.Add("Authorization", authorizationHeader)
+
+	userprofileRes, userProfileReqError := authenticator.httpClient.Do(userProfileReq)
+
+	if userProfileReqError != nil || userprofileRes.StatusCode != 200 {
+		return nil, userProfileReqError
+		log.Fatal("request failed")
+	}
+
+	userProfileReqByte, _ := ioutil.ReadAll(userprofileRes.Body)
+
+	var userProfileMap interface{}
+
+	json.Unmarshal(userProfileReqByte, &userProfileMap)
+	userProfileMap = userProfileMap.(map[string]interface{})
+
+	return userProfileMap.(map[string]interface{}), nil
+}
+
+func (authenticator *AuthManager) RequestTwitterRequestToken() (map[string]string, error) {
+
+	twitterRequestTokenURL := "https://api.twitter.com/oauth/request_token"
+
+	tokenRequestParams := url.Values{}
+
+	tokenRequestParams.Add("oauth_callback", TwitterOauthCallBack)
+
+	tokenRequest, _ := http.NewRequest("POST", twitterRequestTokenURL, strings.NewReader(tokenRequestParams.Encode()))
+
+	tokenRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	oauthParams := url.Values{
+		"oauth_consumer_key":     []string{TwitterApiKey},
+		"oauth_nonce":            []string{strconv.FormatInt(time.Now().Unix(), 10)},
+		"oauth_version":          []string{"1.0"},
+		"oauth_signature_method": []string{"HMAC-SHA1"},
+		"oauth_timestamp":        []string{strconv.FormatInt(time.Now().Unix(), 10)},
+	}
+
+	signature, oauthHeader := misc.OauthSignature("POST", twitterRequestTokenURL, TwitterSecretKey, "", tokenRequestParams, oauthParams)
+
+	tokenRequest.Header.Add("Authorization", oauthHeader)
+	requestedToken, _ := authenticator.httpClient.Do(tokenRequest)
+
+	log.Printf("signature : %s ,\nheader : %s", signature, oauthHeader)
+
+	requestedTokenRes, _ := ioutil.ReadAll(requestedToken.Body)
+
+	log.Printf("%v", requestedToken.StatusCode)
+	log.Printf("%v", requestedToken.Status)
+	log.Printf("%v byte read ; %v", string(requestedTokenRes), requestedToken.ContentLength)
+
+	if requestedToken.StatusCode == 200 {
+		parsedResponse, _ := url.ParseQuery(string(requestedTokenRes))
+
+		return map[string]string{
+			"status_code":              strconv.Itoa(requestedToken.StatusCode),
+			"oauth_token":              parsedResponse.Get("oauth_token"),
+			"oauth_token_secret":       parsedResponse.Get("oauth_token_secret"),
+			"oauth_callback_confirmed": parsedResponse.Get("oauth_callback_confirmed"),
+		}, nil
+
+	} else {
+		return map[string]string{
+			"error":       "could not get request token",
+			"status_code": strconv.Itoa(requestedToken.StatusCode),
+		}, errors.New("could not get request token")
+	}
 }
 
 // TODO need to figure out which params we need
-func (authenticator *AuthManager) getTwitterAccessTokenHandler(){
+func (authenticator *AuthManager) RequestTwitterAccessToken(oauthToken, oauthVerifier string) (map[string]interface{}, error) {
+	log.Printf("getting access token")
+
+	params := url.Values{}
+
+	params.Add("oauth_token", oauthToken)
+	params.Add("oauth_verifier", oauthVerifier)
+
+	twitterAccessTokenURL := "https://api.twitter.com/oauth/access_token" + "?" + params.Encode()
+	tokenRequest, _ := http.NewRequest("POST", twitterAccessTokenURL, nil)
+
+	tokenRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	requestedAccessToken, _ := authenticator.httpClient.Do(tokenRequest)
+	log.Printf("status code for accessToken : %v", requestedAccessToken.StatusCode)
+
+	if requestedAccessToken.StatusCode == 200 {
+		requestedAccessTokenRes, _ := ioutil.ReadAll(requestedAccessToken.Body)
+
+		parsedResponse, _ := url.ParseQuery(string(requestedAccessTokenRes))
+
+		return map[string]interface{}{
+			"status_code":        requestedAccessToken.StatusCode,
+			"oauth_token":        parsedResponse.Get("oauth_token"),
+			"oauth_token_secret": parsedResponse.Get("oauth_token_secret"),
+			"user_id":            parsedResponse.Get("user_id"),
+			"screen_name":        parsedResponse.Get("screen_name"),
+		}, nil
+	} else {
+		return map[string]interface{}{
+			"error":       "could not get access token",
+			"status_code": requestedAccessToken.StatusCode,
+		}, errors.New("could not get access token")
+	}
 
 }
 
-func (authenticator *AuthManager) GetTwitterAccessToken(user user.User) (string,string) {
-	/*
-	userDoc := authenticator.fireStoreDB.Collection("users").Doc(uuid)
-	userDocSnapShot, _ := userDoc.Get(authenticator.ctx)
-	userDocData := userDocSnapShot.Data()
-	spotifyAccountData := userDocData["twitter_account"].(map[string]interface{})
-	return spotifyAccountData["oauth_token"].(string),spotifyAccountData["oauth_token_secret"].(string)
-	*
-	 */
-
-	return "",""
+func (authenticator *AuthManager) GetTwitterAccessToken(uuid string) (string, string, error) {
+	return authenticator.GetUserTwitterOauth(uuid)
 }
 
+type AuthManagerRepository interface {
+	GetUserBySpotifyID(spotifyID string)*user.User
+	GetUserByTwitterID(twitterID string)*user.User
+	GetUserSpotifyAccessToken(twitterID string)string
+	GetUserByUUID(uuid string) (*user.User,error)
+	GetUserTwitterOauth(uuid string) (string, string, error)
+	AddUser(user user.User) error
+}
