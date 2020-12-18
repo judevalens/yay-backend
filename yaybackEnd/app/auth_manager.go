@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"firebase.google.com/go/auth"
+	"go.uber.org/zap"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,9 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"yaybackEnd/misc"
-	"yaybackEnd/model/user"
-	"go.uber.org/zap"
+	"yaybackEnd/helpers"
+	"yaybackEnd/model"
 )
 
 const (
@@ -33,17 +33,15 @@ const (
 	TwitterOauthCallBack = "https://127.0.0.1/twitterCallback/"
 )
 
-
-
 type AuthManager struct {
 	authClient *auth.Client
 	httpClient http.Client
 	ctx        context.Context
-	logger *zap.Logger
+	logger     *zap.Logger
 	AuthManagerRepository
 }
 
-func NewAuthManager(authClient *auth.Client,httpClient http.Client, ctx context.Context,repository AuthManagerRepository) *AuthManager{
+func NewAuthManager(authClient *auth.Client, httpClient http.Client, ctx context.Context, repository AuthManagerRepository) *AuthManager {
 	newAuthManager := new(AuthManager)
 
 	logger, _ := zap.NewDevelopment()
@@ -51,7 +49,7 @@ func NewAuthManager(authClient *auth.Client,httpClient http.Client, ctx context.
 	logger.Sugar()
 
 	newAuthManager.ctx = ctx
-	newAuthManager.httpClient= httpClient
+	newAuthManager.httpClient = httpClient
 	newAuthManager.authClient = authClient
 	newAuthManager.AuthManagerRepository = repository
 	return newAuthManager
@@ -62,21 +60,21 @@ func (authenticator *AuthManager) AuthenticateUser(spotifyAccountData, twitterAc
 
 	userEmail := spotifyAccountData["user_email"].(string)
 
-userRecord, userRecordErr := authenticator.authClient.GetUserByEmail(authenticator.ctx,userEmail)
+	userRecord, userRecordErr := authenticator.authClient.GetUserByEmail(authenticator.ctx, userEmail)
 
-	if userRecord == nil{
+	if userRecord == nil {
 		userRecord, userRecordErr = authenticator.createNewUser(userEmail)
 	}
 
-	if userRecordErr != nil{
+	if userRecordErr != nil {
 		// TODO need to handle error
 		log.Fatal(userRecordErr)
 	}
 
-	user := user.NewUser(userRecord.UID,spotifyAccountData,twitterAccountData)
+	user := model.NewUser(userRecord.UID, spotifyAccountData, twitterAccountData)
 
 	userIsAdded := authenticator.AddUser(*user)
-	if userIsAdded != nil{
+	if userIsAdded != nil {
 		return nil, errors.New("failed register user")
 	}
 	customToken, customTokenErr := authenticator.authClient.CustomToken(authenticator.ctx, user.GetUserUUID())
@@ -92,13 +90,11 @@ userRecord, userRecordErr := authenticator.authClient.GetUserByEmail(authenticat
 
 }
 
-
-func (authenticator *AuthManager)createNewUser(userSpotifyEmail string)(*auth.UserRecord,error){
-	var user = new(auth.UserToCreate)
-	user.Email(userSpotifyEmail).EmailVerified(true)
-	return authenticator.authClient.CreateUser(context.Background(), user)
+func (authenticator *AuthManager) createNewUser(userSpotifyEmail string) (*auth.UserRecord, error) {
+	var userToCreate = new(auth.UserToCreate)
+	userToCreate.Email(userSpotifyEmail).EmailVerified(true)
+	return authenticator.authClient.CreateUser(context.Background(), userToCreate)
 }
-
 
 func (authenticator *AuthManager) LoginWithSpotify(spotifyRecCode string) (map[string]interface{}, error) {
 	tokenReqRes, tokenReqErr := authenticator.RequestSpotifyAccessToken(spotifyRecCode)
@@ -154,7 +150,7 @@ func (authenticator *AuthManager) RequestSpotifyAccessToken(code string) (map[st
 	}
 }
 
-func (authenticator *AuthManager) GetAccessToken(user *user.User) (map[string]interface{}, error) {
+func (authenticator *AuthManager) GetAccessTokenMap(user *model.User) (map[string]interface{}, error) {
 
 	if (time.Now().Unix() - user.GetSpotifyAccount()["token_time_stamp"].(int64)) > (int64(time.Second * 55)) {
 		refreshedAccessTokenMap, refreshedTokenErr := authenticator.RequestSpotifyRefreshedAccessToken(user.GetSpotifyAccount()["refresh_token"].(string))
@@ -170,6 +166,14 @@ func (authenticator *AuthManager) GetAccessToken(user *user.User) (map[string]in
 	} else {
 		return user.GetSpotifyAccount(), nil
 	}
+}
+
+func (authenticator *AuthManager) GetAccessToken(user *model.User) (string, error) {
+	accessTokenMap , accessTokenMapErr := authenticator.GetAccessTokenMap(user)
+	if accessTokenMapErr != nil{
+		return "", accessTokenMapErr
+	}
+	return accessTokenMap["access_token"].(string),nil
 }
 
 func (authenticator *AuthManager) RequestSpotifyRefreshedAccessToken(refreshToken string) (map[string]interface{}, error) {
@@ -210,10 +214,10 @@ func (authenticator *AuthManager) RequestSpotifyRefreshedAccessToken(refreshToke
 }
 
 func (authenticator *AuthManager) RequestSpotifyUserInfo(accessToken string) (map[string]interface{}, error) {
-	url := "https://api.spotify.com/v1/me"
+	spotifyUserProfileUrl := "https://api.spotify.com/v1/me"
 	authorizationHeader := "Bearer " + accessToken
 
-	userProfileReq, _ := http.NewRequest("GET", url, nil)
+	userProfileReq, _ := http.NewRequest("GET", spotifyUserProfileUrl, nil)
 	userProfileReq.Header.Add("Authorization", authorizationHeader)
 
 	userprofileRes, userProfileReqError := authenticator.httpClient.Do(userProfileReq)
@@ -253,7 +257,7 @@ func (authenticator *AuthManager) RequestTwitterRequestToken() (map[string]strin
 		"oauth_timestamp":        []string{strconv.FormatInt(time.Now().Unix(), 10)},
 	}
 
-	signature, oauthHeader := misc.OauthSignature("POST", twitterRequestTokenURL, TwitterSecretKey, "", tokenRequestParams, oauthParams)
+	signature, oauthHeader := helpers.OauthSignature("POST", twitterRequestTokenURL, TwitterSecretKey, "", tokenRequestParams, oauthParams)
 
 	tokenRequest.Header.Add("Authorization", oauthHeader)
 	requestedToken, _ := authenticator.httpClient.Do(tokenRequest)
@@ -327,10 +331,10 @@ func (authenticator *AuthManager) GetTwitterAccessToken(uuid string) (string, st
 }
 
 type AuthManagerRepository interface {
-	GetUserBySpotifyID(spotifyID string)*user.User
-	GetUserByTwitterID(twitterID string)*user.User
-	GetUserSpotifyAccessToken(twitterID string)string
-	GetUserByUUID(uuid string) (*user.User,error)
+	GetUserBySpotifyID(spotifyID string) *model.User
+	GetUserByTwitterID(twitterID string) *model.User
+	GetUserSpotifyAccessToken(twitterID string) string
+	GetUserByUUID(uuid string) (*model.User, error)
 	GetUserTwitterOauth(uuid string) (string, string, error)
-	AddUser(user user.User) error
+	AddUser(user model.User) error
 }

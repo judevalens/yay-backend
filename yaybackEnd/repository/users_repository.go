@@ -4,7 +4,7 @@ import (
 	"cloud.google.com/go/firestore"
 	"context"
 	"log"
-	"yaybackEnd/model/user"
+	"yaybackEnd/model"
 )
 
 type UserFireStoreRepository struct {
@@ -20,11 +20,11 @@ func NewUserFireStoreRepository(db *firestore.Client,ctx context.Context)*UserFi
 }
 
 
-func (u UserFireStoreRepository) GetUserBySpotifyID(spotifyID string) *user.User {
+func (u UserFireStoreRepository) GetUserBySpotifyID(spotifyID string) *model.User {
 	panic("implement me")
 }
 
-func (u UserFireStoreRepository) GetUserByTwitterID(twitterID string) *user.User {
+func (u UserFireStoreRepository) GetUserByTwitterID(twitterID string) *model.User {
 	panic("implement me")
 }
 
@@ -38,7 +38,7 @@ func (u UserFireStoreRepository) GetUserSpotifyAccessToken(uuid string) string {
 	return user.GetSpotifyAccount()["access_token"].(string)
 }
 
-func (u UserFireStoreRepository) GetUserByUUID(uuid string) (*user.User,error) {
+func (u UserFireStoreRepository) GetUserByUUID(uuid string) (*model.User,error) {
 	log.Printf("uuid : %v",uuid)
 	usersCol := u.db.Collection("users").Doc(uuid)
 	userDocSnapShot, userDocSnapShotErr := usersCol.Get(u.ctx)
@@ -56,7 +56,7 @@ func (u UserFireStoreRepository) GetUserByUUID(uuid string) (*user.User,error) {
 	spotifyData := UserData["spotify_account"].(map[string]interface{})
 	twitterData := UserData["twitter_account"].(map[string]interface{})
 
-	return user.NewUser(uuid, spotifyData, twitterData), nil
+	return model.NewUser(uuid, spotifyData, twitterData), nil
 
 }
 
@@ -74,7 +74,7 @@ func (u UserFireStoreRepository) GetUserTwitterOauth(uuid string) (string, strin
 
 }
 
-func (u UserFireStoreRepository) AddUser(user user.User) error {
+func (u UserFireStoreRepository) AddUser(user model.User) error {
 	_, writeError := u.db.Collection("users").Doc(user.GetUserUUID()).Set(context.Background(), map[string]interface{}{
 		"spotify_account": map[string]interface{}{
 			"access_token": user.SpotifyAccount["access_token"],

@@ -1,7 +1,7 @@
-package misc
+package helpers
 
 import (
-"crypto/ecdsa"
+	"crypto/ecdsa"
 "crypto/ed25519"
 "crypto/elliptic"
 "crypto/rand"

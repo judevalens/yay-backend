@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 	auth2 "yaybackEnd/auth"
+	"yaybackEnd/helpers"
 )
 
 const (
@@ -169,7 +170,7 @@ func (artistManager *ArtistManager) followArtist(artistSpotifyObject map[string]
 	oauthParams.Add("oauth_token", twitterUserOauthToken)
 	oauthParams.Add("oauth_timestamp", strconv.FormatInt(time.Now().Unix(), 10))
 
-	_, oauthHeader := auth2.OauthSignature("GET", twitterArtistSearchUrl, auth2.TwitterSecretKey, twitterUserOauthTokenSecret, params, oauthParams)
+	_, oauthHeader := helpers.OauthSignature("GET", twitterArtistSearchUrl, auth2.TwitterSecretKey, twitterUserOauthTokenSecret, params, oauthParams)
 
 	artistReq, _ := http.NewRequest("GET", twitterArtistSearchUrl, nil)
 

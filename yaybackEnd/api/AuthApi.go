@@ -101,7 +101,7 @@ func (authApi *AuthApi) refreshSpotifyToken(res http.ResponseWriter,req *http.Re
 		log.Fatal(userErr)
 	}
 
-	refreshedAccessTokenRes, refreshedAccessTokenResErr := authApi.authManager.GetAccessToken(user)
+	refreshedAccessTokenRes, refreshedAccessTokenResErr := authApi.authManager.GetAccessTokenMap(user)
 
 	if refreshedAccessTokenResErr != nil{
 		// TODO must handle error
