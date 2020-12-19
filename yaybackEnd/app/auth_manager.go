@@ -152,7 +152,12 @@ func (authenticator *AuthManager) RequestSpotifyAccessToken(code string) (map[st
 
 func (authenticator *AuthManager) GetAccessTokenMap(user *model.User) (map[string]interface{}, error) {
 
-	if (time.Now().Unix() - user.GetSpotifyAccount()["token_time_stamp"].(int64)) > (int64(time.Second * 55)) {
+	lastFetchedTime := time.Unix(user.GetSpotifyAccount()["token_time_stamp"].(int64),0)
+
+	elapsedTime := time.Now().Sub(lastFetchedTime)
+
+	maxTime := time.Duration(float64(time.Minute.Nanoseconds() * 60)*0.9)
+	if elapsedTime.Seconds() >= maxTime.Seconds() {
 		refreshedAccessTokenMap, refreshedTokenErr := authenticator.RequestSpotifyRefreshedAccessToken(user.GetSpotifyAccount()["refresh_token"].(string))
 
 		if refreshedTokenErr != nil {
@@ -160,7 +165,15 @@ func (authenticator *AuthManager) GetAccessTokenMap(user *model.User) (map[strin
 			return nil, refreshedTokenErr
 
 		}
-		user.UpdateSpotifyOauthInfo(refreshedAccessTokenMap["access_token"].(string), refreshedAccessTokenMap["token_time_stamp"].(int64))
+
+		log.Printf("token_time_stamp %v",refreshedAccessTokenMap["token_time_stamp"].(int64) )
+
+		updateErr  := authenticator.UpdateSpotifyOauthInfo(*user, refreshedAccessTokenMap["access_token"].(string), refreshedAccessTokenMap["token_time_stamp"].(int64))
+
+		if updateErr != nil {
+			log.Fatal(updateErr)
+			return nil, refreshedTokenErr
+		}
 
 		return refreshedAccessTokenMap, nil
 	} else {
@@ -337,4 +350,5 @@ type AuthManagerRepository interface {
 	GetUserByUUID(uuid string) (*model.User, error)
 	GetUserTwitterOauth(uuid string) (string, string, error)
 	AddUser(user model.User) error
+	UpdateSpotifyOauthInfo(user model.User,accessToken string, accessTokenTimeStamp int64)error
 }

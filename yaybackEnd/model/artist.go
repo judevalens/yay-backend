@@ -14,7 +14,6 @@ func NewArtist(artistAccountData map[string]interface{}) *Artist {
 	newArtist.spotifyAccount = artistAccountData["spotify_account"].(map[string]interface{})
 	newArtist.twitterAccount = artistAccountData["spotify_account"].(map[string]interface{})
 	newArtist.id = artistAccountData["id"].(string)
-
 	return newArtist
 }
 func (a *Artist) GetTwitterAccount() map[string]interface{}{

@@ -28,7 +28,6 @@ func(relationApi *RelationApi) setRoutes(){
 
 	log.Printf("relation route : %v", path)
 }
-
 func (relationApi *RelationApi) updateFollowedArtists(res http.ResponseWriter,req *http.Request)  {
 
 	req.ParseForm()

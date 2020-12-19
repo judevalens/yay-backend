@@ -19,12 +19,12 @@ type RelationManager struct {
 	RelationManagerRepository
 }
 
-func NewRelationManager(httpClient http.Client,authManager *AuthManager, repository RelationManagerRepository) *RelationManager{
+func NewRelationManager(httpClient http.Client, authManager *AuthManager, repository RelationManagerRepository) *RelationManager {
 	newRelationManager := new(RelationManager)
 	newRelationManager.httpClient = httpClient
 	newRelationManager.AuthManager = authManager
 	newRelationManager.RelationManagerRepository = repository
-	return  newRelationManager
+	return newRelationManager
 }
 
 func (r *RelationManager) getFollowedArtistOnSpotify(user *model.User) []*model.Artist {
@@ -48,7 +48,7 @@ func (r *RelationManager) getFollowedArtistOnSpotify(user *model.User) []*model.
 		log.Fatal(followedArtistReqErr)
 	}
 
-	log.Printf("followed artist : %v", string(followedArtistResBody))
+	//log.Printf("followed artist : %v", string(followedArtistResBody))
 
 	var followedArtistJson map[string]interface{}
 
@@ -61,20 +61,27 @@ func (r *RelationManager) getFollowedArtistOnSpotify(user *model.User) []*model.
 
 	var artistList []*model.Artist
 
-	artistsJSON := followedArtistJson["artists"].(map[string]interface{})["items"].([]map[string]interface{})
+	//log.Printf("%v", followedArtistJson["artists"].(map[string]interface{}))
+
+	artistsJSON := followedArtistJson["artists"].(map[string]interface{})["items"].([]interface{})
 
 	for _, artistAccountData := range artistsJSON {
-		artistID := artistAccountData["id"].(string)
-		artist := r.RelationManagerRepository.GetArtistBySpotifyID(artistID)
+
+		artistID := artistAccountData.(map[string]interface{})["id"].(string)
+		artist, _ := r.RelationManagerRepository.GetArtistBySpotifyID(artistID)
 
 		if artist == nil {
-			addArtistErr := r.addArtist(artistAccountData, user)
+			artist, addArtistErr := r.addArtist(artistAccountData.(map[string]interface{}), user)
 			if addArtistErr != nil {
 				// TODO MUST HANDLE ERROR
+				log.Print("addArtistErr")
 				log.Fatal(addArtistErr)
 				///continue
 				/// if artist is not on twitter we might just move onto the next artist in the list
 			}
+			artistList = append(artistList, artist)
+			continue
+
 		}
 
 		artistList = append(artistList, artist)
@@ -87,16 +94,16 @@ func (r *RelationManager) UpdateFollowedArtistList(user *model.User) {
 	for i, _ := range followedArtistSpotify {
 		artist := followedArtistSpotify[i]
 
-		isFollowing := r.RelationManagerRepository.IsFollowingArtist(user, artist)
+		followArtistError := r.followArtist(user, artist)
 
-		if isFollowing {
-			continue
+		if followArtistError != nil{
+			//TODO must handle error
+			log.Print(followArtistError)
 		}
-
-		r.followArtist(user, artist)
 	}
 
-	// TODO must remove the artists that user has unfollowed via the Spotify app
+	// TODO must remove the artists that user has unFollowed via the Spotify app
+	// TODO must decide what to return
 }
 
 func (r *RelationManager) requestArtistSpotifyAccount(artistSpotifyID string) {
@@ -110,6 +117,7 @@ func (r *RelationManager) requestArtistTwitterAccount(artistSpotifyName string, 
 
 	params.Set("q", artistSpotifyName)
 	params.Set("count", "1")
+	params.Set("include_entities", "false")
 
 	oauthParams := url.Values{}
 
@@ -121,7 +129,7 @@ func (r *RelationManager) requestArtistTwitterAccount(artistSpotifyName string, 
 	oauthParams.Add("oauth_token", twitterUserOauthToken)
 	oauthParams.Add("oauth_timestamp", strconv.FormatInt(time.Now().Unix(), 10))
 
-	_, oauthHeader := helpers.OauthSignature("GET", twitterArtistSearchUrl, TwitterApiKey, twitterUserOauthTokenSecret, params, oauthParams)
+	_, oauthHeader := helpers.OauthSignature("GET", twitterArtistSearchUrl, TwitterSecretKey, twitterUserOauthTokenSecret, params, oauthParams)
 
 	artistReq, _ := http.NewRequest("GET", twitterArtistSearchUrl, nil)
 
@@ -138,15 +146,22 @@ func (r *RelationManager) requestArtistTwitterAccount(artistSpotifyName string, 
 	var searchedArtistJson interface{}
 
 	searchedArtistBytes, _ = ioutil.ReadAll(searchedArtistResponse.Body)
+	//log.Printf("searched artist name : %v, \n%v", artistSpotifyName, string(searchedArtistBytes))
 
-	json.Unmarshal(searchedArtistBytes, &searchedArtistJson)
+	searchedArtistUnmarshalErr := json.Unmarshal(searchedArtistBytes, &searchedArtistJson)
 
-	return searchedArtistJson.([]map[string]interface{})[0], nil
+	if searchedArtistUnmarshalErr != nil{
+		// TODO handle error
+		log.Fatal(searchedArtistUnmarshalErr)
+	}
+
+	return searchedArtistJson.([]interface{})[0].(map[string]interface{}), nil
 }
 
-func (r *RelationManager) addArtist(artistSpotifyAccountData map[string]interface{}, user *model.User) error {
+func (r *RelationManager) addArtist(artistSpotifyAccountData map[string]interface{}, user *model.User) (*model.Artist, error) {
 	artistSpotifyID := artistSpotifyAccountData["id"].(string)
-	artistTwitterAccountData, artistTwitterAccountDataErr := r.requestArtistTwitterAccount(artistSpotifyID, user)
+	artistSpotifyName := artistSpotifyAccountData["name"].(string)
+	artistTwitterAccountData, artistTwitterAccountDataErr := r.requestArtistTwitterAccount(artistSpotifyName, user)
 
 	if artistTwitterAccountDataErr != nil {
 		//TODO must handle error
@@ -159,25 +174,26 @@ func (r *RelationManager) addArtist(artistSpotifyAccountData map[string]interfac
 		"twitter_account": artistTwitterAccountData,
 		"followers":       []interface{}{},
 	}
-	return r.RelationManagerRepository.AddArtist(artistAccountData)
+
+	artist := model.NewArtist(artistAccountData)
+	return artist, r.RelationManagerRepository.AddArtist(artistAccountData, artistSpotifyID)
 }
 
-func (r *RelationManager) followArtist(user *model.User, artist *model.Artist) bool {
+func (r *RelationManager) followArtist(user *model.User, artist *model.Artist) error {
 	if r.IsFollowingArtist(user, artist) {
 		log.Printf("artistExist")
-		return true
+		return nil
 	}
 
-	r.RelationManagerRepository.FollowArtist(user, artist)
+	return r.RelationManagerRepository.FollowArtist(user, artist)
 
-	return true
 }
 
 type RelationManagerRepository interface {
 	GetFollowedArtist(user *model.User) []*model.Artist
 	IsFollowingArtist(user *model.User, artist *model.Artist) bool
 	FollowArtist(user *model.User, artist *model.Artist) error
-	GetArtistBySpotifyID(spotifyID string) *model.Artist
+	GetArtistBySpotifyID(spotifyID string) (*model.Artist, error)
 	GetArtistByTwitterID(spotifyID string) *model.Artist
-	AddArtist(data map[string]interface{}) error
+	AddArtist(data map[string]interface{}, spotifyID string) error
 }

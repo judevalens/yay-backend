@@ -57,7 +57,7 @@ func (user *User) GetSpotifyAccount() map[string]interface{}{
 
 func (user *User) GetUserTwitterOauth()(string,string){
 	// TODO check if values exists
-	return user.SpotifyAccount["oauth_token"].(string),user.SpotifyAccount["oauth_secret"].(string)
+	return user.TwitterAccount["oauth_token"].(string),user.TwitterAccount["oauth_token_secret"].(string)
 }
 
 
