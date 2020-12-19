@@ -51,7 +51,7 @@ func (a *ArtistSelectionWorker) Worker(id int, job interface{}) {
 			if poll {
 				a.selectArtists()
 			}
-		case <-time.After(time.Minute*5):
+		case <-time.After(time.Minute * 5):
 			a.selectArtists()
 		}
 	}
@@ -147,7 +147,7 @@ func (f *FeedPoller) updateSingleArtistFetchState(artistSpotifyID string) {
 		if stateUpdateErr != nil {
 			log.Printf("state update failed: \n%v", stateUpdateErr)
 
-			retryCounter = time.Duration(retryCounter.Nanoseconds()+time.Second.Nanoseconds())
+			retryCounter = time.Duration(retryCounter.Nanoseconds() + time.Second.Nanoseconds())
 
 			log.Printf("duration is %v", retryCounter.String())
 		}
@@ -166,23 +166,20 @@ func (f *FeedPoller) poll(artist interface{}) (map[string]interface{}, []map[str
 
 	artistFeedDoc := f.fireStoreDB.Collection("artists_twitter_feeds").Doc(artistTwitterID)
 
-
-
-	artistFeedDocSnapShot, artistFeedDocErr :=artistFeedDoc.Get(f.ctx)
+	artistFeedDocSnapShot, artistFeedDocErr := artistFeedDoc.Get(f.ctx)
 	if artistFeedDocErr != nil {
 		log.Print(artistFeedDocErr)
 	}
 
 	maxID, maxIDErr := artistFeedDocSnapShot.DataAt("greatest_id")
 
-	if maxIDErr != nil{
-			log.Printf("set since_ID")
+	if maxIDErr != nil {
+		log.Printf("set since_ID")
 	}
 
-	if maxID != nil{
+	if maxID != nil {
 		params.Add("since_id", maxID.(string))
 	}
-
 
 	params.Add("count", "50")
 
@@ -191,13 +188,12 @@ func (f *FeedPoller) poll(artist interface{}) (map[string]interface{}, []map[str
 	_, oauthHeader := helpers.OauthSignature("GET", twitterTimeLineUrl, auth2.TwitterSecretKey, "", params, helpers.GetAuthParams(nil))
 
 	artistTimeLineReq, artistTimeLineReqErr_ := http.NewRequest("GET", twitterTimeLineUrl, nil)
-	artistTimeLineReq.Header.Add("Authorization", oauthHeader)
-	artistTimeLineReq.URL.RawQuery = params.Encode()
-	log.Printf("retrieving tweeets for :  %v", artistTwitterID)
-
 	if artistTimeLineReqErr_ != nil {
 		log.Fatal(artistTimeLineReqErr_)
 	}
+	artistTimeLineReq.Header.Add("Authorization", oauthHeader)
+	artistTimeLineReq.URL.RawQuery = params.Encode()
+	log.Printf("retrieving tweeets for :  %v", artistTwitterID)
 
 	artistTimeLineReS, artistTimeLineReSErr := f.ArtistManager.httpClient.Do(artistTimeLineReq)
 
@@ -215,11 +211,11 @@ func (f *FeedPoller) poll(artist interface{}) (map[string]interface{}, []map[str
 	jsonParsingErr := json.Unmarshal(artistTimeLineBodyBytes, &artistTimeLineBody)
 
 	if jsonParsingErr != nil {
-		log.Printf("%v",string(artistTimeLineBodyBytes))
+		log.Printf("%v", string(artistTimeLineBodyBytes))
 		log.Fatal(jsonParsingErr)
 	}
 
-	log.Printf("retrieved %v tweeets , status code : \n%v",len(artistTimeLineBody), artistTimeLineReS.Status)
+	log.Printf("retrieved %v tweeets , status code : \n%v", len(artistTimeLineBody), artistTimeLineReS.Status)
 
 	return artistObj, artistTimeLineBody
 }
@@ -251,10 +247,10 @@ func (f *FeedPoller) processTimeline(artist map[string]interface{}, timeLines []
 
 	if greatestID.Cmp(big.NewInt(-1)) > 0 {
 		feedDoc.Set(f.ArtistManager.ctx, map[string]interface{}{
-		"greatest_id": greatestID.String(),
-	}, firestore.MergeAll)
+			"greatest_id": greatestID.String(),
+		}, firestore.MergeAll)
 
-		}
+	}
 
 	return true
 
@@ -269,15 +265,14 @@ func (c ContentDispatcher) Worker(id int, job interface{}) {
 	panic("implement me")
 }
 
-func NewContentDispatcher(manager *ArtistManager)  *ContentDispatcher{
-	newContentDispatcher := new (ContentDispatcher)
+func NewContentDispatcher(manager *ArtistManager) *ContentDispatcher {
+	newContentDispatcher := new(ContentDispatcher)
 	newContentDispatcher.ArtistManager = manager
-	newContentDispatcher.Dispatcher = job_queue.NewWorkerPool(newContentDispatcher,10,50)
+	newContentDispatcher.Dispatcher = job_queue.NewWorkerPool(newContentDispatcher, 10, 50)
 
 	return newContentDispatcher
 }
 
-
-func (c *ContentDispatcher) contentDispatcher(){
+func (c *ContentDispatcher) contentDispatcher() {
 
 }

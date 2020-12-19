@@ -233,11 +233,9 @@ func (artistManager *ArtistManager) followArtist(artistSpotifyObject map[string]
 	return true
 }
 
-
 func (artistManager *ArtistManager) Worker(id int, job interface{}) {
 
 }
-
 
 func(artistManager *ArtistManager) pullFeed(){
 
