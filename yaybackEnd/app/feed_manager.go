@@ -18,17 +18,21 @@ type ContentManager struct {
 	jobType          int
 	oldestTimeStamp  int
 	artistFeedPuller *job_queue.WorkerPool
-	feedPoller            *FeedPoller
+	feedPoller       *FeedPoller
+	tweetDispatcher  *dispatcher
 	stopPulling      bool
 	stopPollingChan  chan bool
 	ContentManagerRepository
 }
 
-func NewContentManager(repo ContentManagerRepository,httpClient http.Client) *ContentManager {
+func NewContentManager(repo ContentManagerRepository, httpClient http.Client) *ContentManager {
 	contentManager := new(ContentManager)
 	contentManager.artistFeedPuller = job_queue.NewWorkerPool(contentManager, 1, 2)
 	contentManager.stopPollingChan = make(chan bool, 100)
 	contentManager.feedPoller = NewFeedPoller(contentManager)
+	contentManager.tweetDispatcher = &dispatcher{}
+	contentManager.tweetDispatcher.dispatcher = job_queue.NewWorkerPool(contentManager.tweetDispatcher, 5, 10)
+	contentManager.tweetDispatcher.ContentManager = contentManager
 	contentManager.ContentManagerRepository = repo
 	contentManager.httpClient = httpClient
 	contentManager.startSelection()
@@ -76,7 +80,7 @@ type FeedPoller struct {
 func NewFeedPoller(manager *ContentManager) *FeedPoller {
 	newPoller := new(FeedPoller)
 
-	newPoller.Poller = job_queue.NewWorkerPool(newPoller, 3, 10)
+	newPoller.Poller = job_queue.NewWorkerPool(newPoller, 5, 100)
 	newPoller.ContentManager = manager
 
 	newPoller.Poller.Start()
@@ -153,6 +157,24 @@ func (f *FeedPoller) processTimeline(artistQueueItem model.ArtistFeedQueue, time
 func (f *FeedPoller) updateSingleArtistFetchState(artistSpotifyID string) {
 
 	f.UpdateArtistQueueState(artistSpotifyID)
+
+}
+
+type dispatcher struct {
+	dispatcher *job_queue.WorkerPool
+	*ContentManager
+}
+
+func (t dispatcher) Worker(id int, job interface{}) {
+	contentInfo := job.(map[string]interface{})
+	contentType := contentInfo["content_type"].(string)
+
+	if contentType == "tweet" {
+		t.dispatchTweet(contentInfo)
+	}
+}
+
+func (t dispatcher) dispatchTweet(tweetsInfo map[string]interface{}) {
 
 }
 

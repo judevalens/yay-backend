@@ -77,10 +77,12 @@ func (c ContentManagerFireStoreRepository) SelectArtistBatch(pollingStateChan ch
 
 }
 
-func (c ContentManagerFireStoreRepository) UpdateArtistTwitterFeed(artistQueueItem model.ArtistFeedQueue, timeLines []map[string]interface{}) (int, error) {
+func (c ContentManagerFireStoreRepository) UpdateArtistTwitterFeed(artistQueueItem model.ArtistFeedQueue, timeLines []map[string]interface{},dispatcher *job_queue.WorkerPool) (int, error) {
 	var greatestID = big.NewInt(-1)
 	feedDoc := c.db.Collection("artists_twitter_feeds").Doc(artistQueueItem.TwitterID)
 	tweetsCollection := feedDoc.Collection("tweets")
+
+	var tweetsInfo []map[string]interface{}
 
 	nTweet := 0
 
@@ -103,10 +105,24 @@ func (c ContentManagerFireStoreRepository) UpdateArtistTwitterFeed(artistQueueIt
 
 		if twitterFeedUpdateErr != nil {
 			nTweet--
+		}else{
+			tweetsInfo = append(tweetsInfo, map[string]interface{}{
+				"tweet_id":  tweetID,
+				"from_twitter_id": artistQueueItem.TwitterID,
+				"from_twitter_spotify_id": artistQueueItem.TwitterID,
+				"retrieved_time": time.Now().Unix(),
+			})
 		}
 
-		///f.ContentDispatcher.ContentDispatcher.Dispatcher.AddJob(tweet)
 	}
+
+	dispatcher.AddJob(map[string]interface{}{
+		"from": artistQueueItem,
+		"content": tweetsInfo,
+		// TODO we should probably use an enum here
+		"content_type": "tweet",
+	})
+
 
 	if greatestID.Cmp(big.NewInt(-1)) > 0 {
 		_, greatestIDUpdateErr := feedDoc.Set(c.ctx, map[string]interface{}{
