@@ -10,6 +10,14 @@ import (
 	"time"
 )
 
+const(
+	TwitterApiKey        = "9OTPANWh0sX2TmBqSz3IG1WQa"
+	TwitterSecretKey     = "6Jil7rakvEFzhslXxxCuM8Szf8ZC6qUQmNK6dbMSjCNNK6qwuD"
+	TwitterBearerToken   = "AAAAAAAAAAAAAAAAAAAAANPdKQEAAAAAXkg3AHAmFBW8OpZlV1LNy5nDHbg%3D7Spe4lgo4cFqabdV12XHKPn28H4k9esKo9znQkXDeZoNSBOGWz"
+	TwitterAccessToken   = "2919369773-YRHJGm5S5IqXqN6S61k9jU5f5oIqDXazARzEYFo"
+	TwitterAccessSecret  = "B7P71NG4Bk5oVfVlYL5wpU8VShwRDoddYEKGz1FX3KReE"
+)
+
 func OauthSignature(method ,baseUrl , appSecret, userSecret string,params url.Values, authParams url.Values)(string,string){
 
 	var encodedParams []string
@@ -104,7 +112,7 @@ func GetAuthParams(params map[string]string) url.Values{
 		}
 	}
 
-	oauthParams.Add("oauth_consumer_key", "auth2.TwitterApiKey")
+	oauthParams.Add("oauth_consumer_key", TwitterApiKey)
 	oauthParams.Add("oauth_nonce", strconv.FormatInt(time.Now().Unix(), 10))
 	oauthParams.Add("oauth_version", "1.0")
 	oauthParams.Add("oauth_signature_method", "HMAC-SHA1")

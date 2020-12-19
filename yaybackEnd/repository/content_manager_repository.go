@@ -3,19 +3,34 @@ package repository
 import (
 	"cloud.google.com/go/firestore"
 	"context"
+	"errors"
+	"math/big"
+	"yaybackEnd/model"
+
 	"log"
 	"time"
-	"yaybackEnd/app"
+	_ "yaybackEnd/auth"
+	_ "yaybackEnd/helpers"
 	"yaybackEnd/job_queue"
 )
 
-type ContentManagerFireStoreRepo struct {
+type ContentManagerFireStoreRepository struct {
 	db  *firestore.Client
 	ctx context.Context
-	app.AuthManagerRepository
+	//app.AuthManagerRepository
 }
 
-func (c ContentManagerFireStoreRepo) SelectArtistBatch(pollingStateChan chan bool, feedRetrievalQueue *job_queue.WorkerPool, max int) {
+func NewContentManagerFireStoreRepository (db *firestore.Client,ctx context.Context )*ContentManagerFireStoreRepository{
+
+	newContentManagerFireStoreRepository := new(ContentManagerFireStoreRepository)
+	newContentManagerFireStoreRepository.db = db
+	newContentManagerFireStoreRepository.ctx =ctx
+
+	return newContentManagerFireStoreRepository
+
+}
+
+func (c ContentManagerFireStoreRepository) SelectArtistBatch(pollingStateChan chan bool, feedRetrievalQueue *job_queue.WorkerPool, max int) {
 
 	artistsRef := c.db.Collection("artists_feed_retrieval_queue").Where("state", "==", "done").Where("last_fetch", "<=", time.Now().Unix()-int64((time.Minute).Seconds())).Limit(max)
 	_ = c.db.RunTransaction(c.ctx, func(ctx context.Context, transaction *firestore.Transaction) error {
@@ -34,7 +49,10 @@ func (c ContentManagerFireStoreRepo) SelectArtistBatch(pollingStateChan chan boo
 		pollingStateChan <- nSelectedArtist >= 50
 
 		for _, artistFetchStateSnapShot := range selectedArtist {
-			addedToQueue := feedRetrievalQueue.AddJob(artistFetchStateSnapShot.Data())
+			log.Print(artistFetchStateSnapShot.Data())
+
+			artist := model.NewArtistFeedQueue(artistFetchStateSnapShot.Data())
+			addedToQueue := feedRetrievalQueue.AddJob(artist)
 
 			if addedToQueue {
 				log.Printf("updating state....")
@@ -57,4 +75,96 @@ func (c ContentManagerFireStoreRepo) SelectArtistBatch(pollingStateChan chan boo
 		return nil
 	})
 
+}
+
+func (c ContentManagerFireStoreRepository) UpdateArtistTwitterFeed(artistQueueItem model.ArtistFeedQueue, timeLines []map[string]interface{}) (int, error) {
+	var greatestID = big.NewInt(-1)
+	feedDoc := c.db.Collection("artists_twitter_feeds").Doc(artistQueueItem.TwitterID)
+	tweetsCollection := feedDoc.Collection("tweets")
+
+	nTweet := 0
+
+	for _, tweet := range timeLines {
+		nTweet++
+		tweetID := tweet["id_str"].(string)
+		tweetIDInt := big.NewInt(-1)
+		tweetIDInt, tweetIDIntErr := tweetIDInt.SetString(tweetID, 10)
+
+		if !tweetIDIntErr {
+			log.Fatal("converting id to int failed")
+		}
+
+		if tweetIDInt.Cmp(greatestID) > 0 {
+			greatestID = greatestID.Set(tweetIDInt)
+		}
+		_, twitterFeedUpdateErr := tweetsCollection.Doc(tweetID).Set(c.ctx, map[string]interface{}{
+			"tweet": tweet,
+		}, firestore.MergeAll)
+
+		if twitterFeedUpdateErr != nil {
+			nTweet--
+		}
+
+		///f.ContentDispatcher.ContentDispatcher.Dispatcher.AddJob(tweet)
+	}
+
+	if greatestID.Cmp(big.NewInt(-1)) > 0 {
+		_, greatestIDUpdateErr := feedDoc.Set(c.ctx, map[string]interface{}{
+			"greatest_id": greatestID.String(),
+		}, firestore.MergeAll)
+
+		if greatestIDUpdateErr != nil {
+			//TODO not the right way to handle this :)
+			return nTweet, greatestIDUpdateErr
+		}
+
+	}
+
+	return nTweet, nil
+}
+
+func (c ContentManagerFireStoreRepository) GetFeedGreatestTweetID(artistTwitterID string) (string, error) {
+
+	artistFeedDoc := c.db.Collection("artists_twitter_feeds").Doc(artistTwitterID)
+
+	artistFeedDocSnapShot, artistFeedDocErr := artistFeedDoc.Get(c.ctx)
+	if artistFeedDocErr != nil {
+		log.Print(artistFeedDocErr)
+	}
+
+	maxID, maxIDErr := artistFeedDocSnapShot.DataAt("greatest_id")
+
+	if maxIDErr != nil {
+		return "", maxIDErr
+	}
+
+	return maxID.(string), nil
+
+}
+
+func (c ContentManagerFireStoreRepository) UpdateArtistQueueState(artistSpotifyID string) {
+	var stateUpdateErr error = errors.New("")
+	var retryCounter time.Duration = time.Second * 2
+
+	for stateUpdateErr != nil {
+		time.Sleep(retryCounter)
+		_, stateUpdateErr = c.db.Collection("artists_feed_retrieval_queue").Doc(artistSpotifyID).Update(c.ctx, []firestore.Update{
+			{
+				Path:  "last_fetch",
+				Value: time.Now().Unix(),
+			},
+			{
+				Path:  "state",
+				Value: "done",
+			},
+		})
+		if stateUpdateErr != nil {
+			log.Printf("artist queue state failed to update: \n%v", stateUpdateErr)
+
+			retryCounter = time.Duration(retryCounter.Nanoseconds() + time.Second.Nanoseconds())
+
+			log.Printf("duration is %v", retryCounter.String())
+		}
+
+	}
 }

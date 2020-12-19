@@ -25,11 +25,7 @@ const (
 )
 
 const (
-	TwitterApiKey        = "9OTPANWh0sX2TmBqSz3IG1WQa"
-	TwitterSecretKey     = "6Jil7rakvEFzhslXxxCuM8Szf8ZC6qUQmNK6dbMSjCNNK6qwuD"
-	TwitterBearerToken   = "AAAAAAAAAAAAAAAAAAAAANPdKQEAAAAAXkg3AHAmFBW8OpZlV1LNy5nDHbg%3D7Spe4lgo4cFqabdV12XHKPn28H4k9esKo9znQkXDeZoNSBOGWz"
-	TwitterAccessToken   = "2919369773-YRHJGm5S5IqXqN6S61k9jU5f5oIqDXazARzEYFo"
-	TwitterAccessSecret  = "B7P71NG4Bk5oVfVlYL5wpU8VShwRDoddYEKGz1FX3KReE"
+
 	TwitterOauthCallBack = "https://127.0.0.1/twitterCallback/"
 )
 
@@ -263,14 +259,14 @@ func (authenticator *AuthManager) RequestTwitterRequestToken() (map[string]strin
 	tokenRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	oauthParams := url.Values{
-		"oauth_consumer_key":     []string{TwitterApiKey},
+		"oauth_consumer_key":     []string{helpers.TwitterSecretKey},
 		"oauth_nonce":            []string{strconv.FormatInt(time.Now().Unix(), 10)},
 		"oauth_version":          []string{"1.0"},
 		"oauth_signature_method": []string{"HMAC-SHA1"},
 		"oauth_timestamp":        []string{strconv.FormatInt(time.Now().Unix(), 10)},
 	}
 
-	signature, oauthHeader := helpers.OauthSignature("POST", twitterRequestTokenURL, TwitterSecretKey, "", tokenRequestParams, oauthParams)
+	signature, oauthHeader := helpers.OauthSignature("POST", twitterRequestTokenURL, helpers.TwitterSecretKey, "", tokenRequestParams, oauthParams)
 
 	tokenRequest.Header.Add("Authorization", oauthHeader)
 	requestedToken, _ := authenticator.httpClient.Do(tokenRequest)
