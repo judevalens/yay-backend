@@ -9,7 +9,6 @@ import (
 
 	"log"
 	"time"
-	_ "yaybackEnd/auth"
 	_ "yaybackEnd/helpers"
 	"yaybackEnd/job_queue"
 )
@@ -18,6 +17,43 @@ type ContentManagerFireStoreRepository struct {
 	db  *firestore.Client
 	ctx context.Context
 	//app.AuthManagerRepository
+}
+
+func (c ContentManagerFireStoreRepository) GetArtistFollowers(artistSpotifyID string) ([]string,error) {
+	log.Printf("retrieving followers for : %v", artistSpotifyID)
+	artistDoc, artistDocErr := c.db.Collection("artists").Doc(artistSpotifyID).Get(c.ctx)
+
+	if artistDocErr != nil{
+		return nil,artistDocErr
+	}
+
+	artistFollowersI, _ := artistDoc.DataAt("followers")
+
+	var followers []string
+
+	for _, follower := range artistFollowersI.([]interface{}) {
+		followers = append(followers,follower.(string))
+	}
+
+	return followers, nil
+}
+
+
+
+func (c ContentManagerFireStoreRepository) UpdateFollowerFeed(userSpotifyID string, feedItems []map[string]interface{})(int,error) {
+
+	userFeedDoc := c.db.Collection("users_feed").Doc(userSpotifyID)
+	addedItemCounter := 0
+	for _, item := range feedItems {
+		addedItemCounter++
+		item["sever_timestamp"] = firestore.ServerTimestamp
+		_, addItemToUserFeedErr := userFeedDoc.Collection("items").Doc(item["item_id"].(string)).Set(c.ctx,item)
+
+		if addItemToUserFeedErr != nil{
+			addedItemCounter--
+		}
+	}
+	return addedItemCounter,nil
 }
 
 func NewContentManagerFireStoreRepository (db *firestore.Client,ctx context.Context )*ContentManagerFireStoreRepository{
@@ -44,7 +80,7 @@ func (c ContentManagerFireStoreRepository) SelectArtistBatch(pollingStateChan ch
 
 		nSelectedArtist := len(selectedArtist)
 
-		log.Printf("%v artists were retrived", nSelectedArtist)
+		log.Printf("%v artists were retrieved", nSelectedArtist)
 
 		pollingStateChan <- nSelectedArtist >= 50
 
@@ -106,22 +142,39 @@ func (c ContentManagerFireStoreRepository) UpdateArtistTwitterFeed(artistQueueIt
 		if twitterFeedUpdateErr != nil {
 			nTweet--
 		}else{
-			tweetsInfo = append(tweetsInfo, map[string]interface{}{
-				"tweet_id":  tweetID,
-				"from_twitter_id": artistQueueItem.TwitterID,
-				"from_twitter_spotify_id": artistQueueItem.TwitterID,
-				"retrieved_time": time.Now().Unix(),
-			})
+			tweetDate :=  tweet["created_at"].(string)
+			tweetTimeStamp, tweetTimeStampErr := time.Parse(time.RubyDate, tweetDate)
+
+			if tweetTimeStampErr != nil {
+				log.Printf("err")
+				nTweet--
+			}else {
+				tweetsInfo = append(tweetsInfo, map[string]interface{}{
+					"item_id":  tweetID,
+					"creator_type": "artist",
+					"sorting_timestamp": tweetTimeStamp.Unix(),
+					"created_by_twitter_id": artistQueueItem.TwitterID,
+					"created_by_spotify_id": artistQueueItem.SpotifyID,
+					"timestamp": firestore.ServerTimestamp,
+					"content_type": "tweet",
+					"seen": false,
+				})
+			}
+
 		}
 
 	}
 
-	dispatcher.AddJob(map[string]interface{}{
-		"from": artistQueueItem,
-		"content": tweetsInfo,
-		// TODO we should probably use an enum here
-		"content_type": "tweet",
-	})
+	if nTweet > 0{
+		dispatcher.AddJob(map[string]interface{}{
+			"created_by": artistQueueItem,
+			"content": tweetsInfo,
+			// TODO we should probably use an enum here
+			"content_type": "tweet",
+		})
+	}
+
+
 
 
 	if greatestID.Cmp(big.NewInt(-1)) > 0 {

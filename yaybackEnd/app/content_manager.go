@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"time"
-	auth2 "yaybackEnd/auth"
 	"yaybackEnd/helpers"
 	"yaybackEnd/job_queue"
 	"yaybackEnd/model"
@@ -32,11 +31,19 @@ func NewContentManager(repo ContentManagerRepository, httpClient http.Client) *C
 	contentManager.feedPoller = NewFeedPoller(contentManager)
 	contentManager.tweetDispatcher = &dispatcher{}
 	contentManager.tweetDispatcher.dispatcher = job_queue.NewWorkerPool(contentManager.tweetDispatcher, 5, 10)
+	contentManager.tweetDispatcher.dispatcher.Start()
 	contentManager.tweetDispatcher.ContentManager = contentManager
 	contentManager.ContentManagerRepository = repo
 	contentManager.httpClient = httpClient
 	contentManager.startSelection()
 	return contentManager
+}
+
+
+func (a *ContentManager) fetchTweets(userTwitter,query string){
+	twitterSearchUrl := "https://api.twitter.com/1.1/search/tweets.json"
+	_, oauthHeader := helpers.OauthSignature("GET", twitterSearchUrl, helpers.TwitterSecretKey, "", params, helpers.GetAuthParams(nil))
+
 }
 
 func (a *ContentManager) startSelection() {
@@ -93,6 +100,7 @@ func (f *FeedPoller) Worker(id int, job interface{}) {
 	_, _ = f.processTimeline(artist, timelines)
 	go func() { f.updateSingleArtistFetchState(artist.SpotifyID) }()
 }
+
 func (f *FeedPoller) poll(artistQueueItem model.ArtistFeedQueue) ([]map[string]interface{}, error) {
 	twitterTimeLineUrl := "https://api.twitter.com/1.1/statuses/user_timeline.json"
 	params := url.Values{}
@@ -109,7 +117,7 @@ func (f *FeedPoller) poll(artistQueueItem model.ArtistFeedQueue) ([]map[string]i
 
 	params.Add("user_id", artistTwitterID)
 
-	_, oauthHeader := helpers.OauthSignature("GET", twitterTimeLineUrl, auth2.TwitterSecretKey, "", params, helpers.GetAuthParams(nil))
+	_, oauthHeader := helpers.OauthSignature("GET", twitterTimeLineUrl, helpers.TwitterSecretKey, "", params, helpers.GetAuthParams(nil))
 
 	artistTimeLineReq, artistTimeLineReqErr_ := http.NewRequest("GET", twitterTimeLineUrl, nil)
 	if artistTimeLineReqErr_ != nil {
@@ -146,7 +154,7 @@ func (f *FeedPoller) poll(artistQueueItem model.ArtistFeedQueue) ([]map[string]i
 
 func (f *FeedPoller) processTimeline(artistQueueItem model.ArtistFeedQueue, timeLines []map[string]interface{}) (int, error) {
 
-	n, updateErr := f.UpdateArtistTwitterFeed(artistQueueItem, timeLines)
+	n, updateErr := f.UpdateArtistTwitterFeed(artistQueueItem, timeLines,f.tweetDispatcher.dispatcher)
 
 	log.Printf("%v tweets were process. \nerror %v", n, updateErr)
 
@@ -168,6 +176,7 @@ type dispatcher struct {
 func (t dispatcher) Worker(id int, job interface{}) {
 	contentInfo := job.(map[string]interface{})
 	contentType := contentInfo["content_type"].(string)
+	log.Printf("dispatching %v by %v ",contentType,contentInfo["created_by"].(model.ArtistFeedQueue).SpotifyID)
 
 	if contentType == "tweet" {
 		t.dispatchTweet(contentInfo)
@@ -175,12 +184,35 @@ func (t dispatcher) Worker(id int, job interface{}) {
 }
 
 func (t dispatcher) dispatchTweet(tweetsInfo map[string]interface{}) {
+	artistInfo := tweetsInfo["created_by"].(model.ArtistFeedQueue)
+	feedItems := tweetsInfo["content"].([]map[string]interface{})
+	followers, followersErr := t.GetArtistFollowers(artistInfo.SpotifyID)
+
+	if followersErr != nil{
+		//TODO must handle error
+		log.Fatal(followersErr)
+	}
+
+	log.Printf("followers : %v",followers)
+	// could probably use multiple coroutines to speed this process
+	for _, followerSpotifyID := range followers {
+		nItemAdded, nItemAddedErr := t.UpdateFollowerFeed(followerSpotifyID, feedItems)
+
+		if nItemAddedErr != nil{
+			//TODO must handle error
+			log.Fatal(nItemAddedErr)
+		}
+		log.Printf("%v were added to : %v's feed",nItemAdded,followerSpotifyID)
+	}
 
 }
 
 type ContentManagerRepository interface {
 	SelectArtistBatch(pollingStateChan chan bool, feedRetrievalQueue *job_queue.WorkerPool, max int)
 	GetFeedGreatestTweetID(artistSpotifyID string) (string, error)
-	UpdateArtistTwitterFeed(artistQueueItem model.ArtistFeedQueue, timeLines []map[string]interface{}) (int, error)
+	UpdateArtistTwitterFeed(artistQueueItem model.ArtistFeedQueue, timeLines []map[string]interface{}, dispatcher *job_queue.WorkerPool) (int, error)
 	UpdateArtistQueueState(artistSpotifyID string)
+	// TODO should return the artist model objects
+	GetArtistFollowers(artistSpotifyID string)([]string,error)
+	UpdateFollowerFeed(userSpotifyID string, feedItems []map[string]interface{})(int,error)
 }

@@ -1,8 +1,8 @@
 package main
+
 import (
 	"cloud.google.com/go/firestore"
 	"context"
-	"fmt"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
@@ -40,9 +40,9 @@ func main() {
 
 	app, err := firebase.NewApp(context.Background(), conf)
 	if err != nil {
-		log.Fatalf("error initializing app: %v\n", err)
+		log.Fatalf("authClientErr initializing app: %v\n", err)
 	}
-	authClient, error := app.Auth(ctx)
+	authClient, authClientErr := app.Auth(ctx)
 
 	_, dbError := app.Database(ctx)
 
@@ -52,7 +52,7 @@ func main() {
 		log.Fatal(dbError)
 	}
 
-	log.Printf("getting auth client , error : %v", error)
+	log.Printf("getting auth client , authClientErr : %v", authClientErr)
 
 	var router = mux.NewRouter()
 	authManagerRepository := repository.NewUserFireStoreRepository(fireStoreDB,ctx)
@@ -73,18 +73,9 @@ func main() {
 	log.Printf("test")
 	})
 
-	//authenticator := auth.NewAuthenticator(authClient, db,fireStoreDB, ctx, router)
-
-//	_ = artistManager.GetArtistManger(authClient, db,fireStoreDB, ctx, authenticator, router)
-
-	//_ = http.ListenAndServe(addr, router)
 
 	err = http.ListenAndServeTLS(addr, "cert.pem", "key.pem", router)
 	log.Fatal(err)
-
-
-	fmt.Printf("hello %v",app)
-
 }
 
 

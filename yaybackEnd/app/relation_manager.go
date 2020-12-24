@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strconv"
 	"time"
-	auth2 "yaybackEnd/auth"
 	"yaybackEnd/helpers"
 	"yaybackEnd/model"
 )
@@ -66,21 +65,20 @@ func (r *RelationManager) getFollowedArtistOnSpotify(user *model.User) []*model.
 	artistsJSON := followedArtistJson["artists"].(map[string]interface{})["items"].([]interface{})
 
 	for _, artistAccountData := range artistsJSON {
-
+		var artist *model.Artist
+		var addArtistErr error
 		artistID := artistAccountData.(map[string]interface{})["id"].(string)
-		artist, _ := r.RelationManagerRepository.GetArtistBySpotifyID(artistID)
+		artist, _ = r.RelationManagerRepository.GetArtistBySpotifyID(artistID)
 
 		if artist == nil {
-			artist, addArtistErr := r.addArtist(artistAccountData.(map[string]interface{}), user)
+			artist, addArtistErr = r.addArtist(artistAccountData.(map[string]interface{}), user)
 			if addArtistErr != nil {
 				// TODO MUST HANDLE ERROR
 				log.Print("addArtistErr")
-				log.Fatal(addArtistErr)
-				///continue
+				log.Print(addArtistErr)
+				continue
 				/// if artist is not on twitter we might just move onto the next artist in the list
 			}
-			artistList = append(artistList, artist)
-			continue
 
 		}
 
@@ -121,7 +119,7 @@ func (r *RelationManager) requestArtistTwitterAccount(artistSpotifyName string, 
 
 	oauthParams := url.Values{}
 
-	oauthParams.Add("oauth_consumer_key", auth2.TwitterApiKey)
+	oauthParams.Add("oauth_consumer_key", helpers.TwitterApiKey)
 	oauthParams.Add("oauth_nonce", strconv.FormatInt(time.Now().Unix(), 10))
 	oauthParams.Add("oauth_version", "1.0")
 	oauthParams.Add("oauth_signature_method", "HMAC-SHA1")
