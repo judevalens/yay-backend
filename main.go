@@ -20,11 +20,11 @@ var addr string = ":8000"
 
 var ctx = context.Background()
 var conf = &firebase.Config{
-DatabaseURL: "https://yay-music.firebaseio.com/",
+	DatabaseURL: "https://yay-music.firebaseio.com/",
 }
 
 type App struct {
-	router mux.Router
+	router    mux.Router
 	fireStore firestore.Client
 }
 
@@ -48,34 +48,33 @@ func main() {
 
 	fireStoreDB, fireStoreDBErr := app.Firestore(ctx)
 
-	if dbError != nil && fireStoreDBErr != nil{
+	if dbError != nil && fireStoreDBErr != nil {
 		log.Fatal(dbError)
 	}
 
 	log.Printf("getting auth client , authClientErr : %v", authClientErr)
 
 	var router = mux.NewRouter()
-	authManagerRepository := repository.NewUserFireStoreRepository(fireStoreDB,ctx)
-	authManager := app2.NewAuthManager(authClient,http.Client{},ctx,authManagerRepository)
+	authManagerRepository := repository.NewUserFireStoreRepository(fireStoreDB, ctx)
+	authManager := app2.NewAuthManager(authClient, http.Client{}, ctx, authManagerRepository)
 
-	relationManagerRepository := repository.NewRelationsFireStoreRepository(fireStoreDB,ctx)
-	relationManager := app2.NewRelationManager(http.Client{},authManager,relationManagerRepository)
+	relationManagerRepository := repository.NewRelationsFireStoreRepository(fireStoreDB, ctx)
+	relationManager := app2.NewRelationManager(http.Client{}, authManager, relationManagerRepository)
 
-	contentManagerRepository := repository.NewContentManagerFireStoreRepository(fireStoreDB,ctx)
+	contentManagerRepository := repository.NewContentManagerFireStoreRepository(fireStoreDB, ctx)
 
-	_ = app2.NewContentManager(contentManagerRepository,http.Client{},authManager)
+	contentManager := app2.NewContentManager(contentManagerRepository, http.Client{}, authManager)
 
-	_ = api.NewAuthApi(router,authManager)
+	_ = api.NewAuthApi(router, authManager)
 
-	_ = api.NewRelationApi(router,relationManager)
+	_ = api.NewRelationApi(router, relationManager)
+
+	_ = api.NewContentApi(router, contentManager)
 
 	router.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-	log.Printf("test")
+		log.Printf("test")
 	})
-
 
 	err = http.ListenAndServeTLS(addr, "cert.pem", "key.pem", router)
 	log.Fatal(err)
 }
-
-

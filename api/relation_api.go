@@ -30,7 +30,7 @@ func(relationApi *RelationApi) setRoutes(){
 }
 func (relationApi *RelationApi) updateFollowedArtists(res http.ResponseWriter,req *http.Request)  {
 
-	req.ParseForm()
+	_ = req.ParseForm()
 
 	userID := req.Form.Get("user_id")
 
