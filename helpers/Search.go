@@ -3,6 +3,8 @@ package helpers
 import (
 	"github.com/algolia/algoliasearch-client-go/algolia/search"
 )
+const algoliaToken = "947dbe7381b65d1cff9ba87081814258"
+const appID = "9VD06SK8X2"
 type AlgoliaSearch struct {
 	client *search.Client
 	userIndex *search.Index
@@ -10,7 +12,7 @@ type AlgoliaSearch struct {
 
 func NewAlgoliaSearch() *AlgoliaSearch{
 	newAlgoliaSearch := new(AlgoliaSearch)
-	newAlgoliaSearch.client = search.NewClient("","")
+	newAlgoliaSearch.client = search.NewClient(appID,algoliaToken)
 	newAlgoliaSearch.userIndex = newAlgoliaSearch.client.InitIndex("users")
 	return newAlgoliaSearch
 }

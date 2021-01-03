@@ -43,7 +43,7 @@ func (c ContentManagerFireStoreRepository) GetTweetFlow(trackID string) (map[str
 	tweetFlow  := tweetFlowSnapShot.Data()
 	tweetFlow["tweets"] = tweets
 
-		log.Printf("tweet flow : %v",tweetFlow)
+		//log.Printf("tweet flow : %v",tweetFlow)
 	return tweetFlow, nil
 }
 

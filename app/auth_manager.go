@@ -72,10 +72,16 @@ func (authenticator *AuthManager) AuthenticateUser(spotifyAccountData, twitterAc
 
 	user := model.NewUser(userRecord.UID, spotifyAccountData, twitterAccountData)
 
+		log.Printf("spotify account data \n %v" ,spotifyAccountData)
 	userIsAdded := authenticator.AddUser(*user)
 	if userIsAdded != nil {
 		return nil, errors.New("failed register user")
 	}
+	_ = authenticator.IndexUser(map[string]string{
+		"spotify_name": user.SpotifyAccount["display_name"].(string),
+		"twitter_name": user.TwitterAccount["screen_name"].(string),
+		"user_id": user.GetUserUUID(),
+	})
 	customToken, customTokenErr := authenticator.authClient.CustomToken(authenticator.ctx, user.GetUserUUID())
 
 	if customTokenErr != nil {
@@ -151,7 +157,13 @@ func (authenticator *AuthManager) RequestSpotifyAccessToken(code string) (map[st
 
 func (authenticator *AuthManager) GetAccessTokenMap(user *model.User) (map[string]interface{}, error) {
 
-	lastFetchedTime := time.Unix(user.GetSpotifyAccount()["token_time_stamp"].(int64),0)
+	tokenTimeStamp, isFloat := user.GetSpotifyAccount()["token_time_stamp"].(int64)
+
+	if isFloat{
+		tokenTimeStamp  = int64(user.GetSpotifyAccount()["token_time_stamp"].(float64))
+	}
+
+	lastFetchedTime := time.Unix(tokenTimeStamp,0)
 
 	elapsedTime := time.Now().Sub(lastFetchedTime)
 
