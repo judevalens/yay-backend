@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"yaybackEnd/api"
 	app2 "yaybackEnd/app"
+	"yaybackEnd/helpers"
 	"yaybackEnd/repository"
 
 	firebase "firebase.google.com/go"
@@ -54,9 +55,11 @@ func main() {
 
 	log.Printf("getting auth client , authClientErr : %v", authClientErr)
 
+	searchService := helpers.NewAlgoliaSearch()
+
 	var router = mux.NewRouter()
 	authManagerRepository := repository.NewUserFireStoreRepository(fireStoreDB, ctx)
-	authManager := app2.NewAuthManager(authClient, http.Client{}, ctx, authManagerRepository)
+	authManager := app2.NewAuthManager(authClient, http.Client{}, ctx, authManagerRepository,searchService)
 
 	relationManagerRepository := repository.NewRelationsFireStoreRepository(fireStoreDB, ctx)
 	relationManager := app2.NewRelationManager(http.Client{}, authManager, relationManagerRepository)

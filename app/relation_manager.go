@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -153,7 +154,14 @@ func (r *RelationManager) requestArtistTwitterAccount(artistSpotifyName string, 
 		log.Fatal(searchedArtistUnmarshalErr)
 	}
 
-	return searchedArtistJson.([]interface{})[0].(map[string]interface{}), nil
+	searchResult := searchedArtistJson.([]interface{})
+
+	if len(searchResult) > 0 {
+		return searchResult[0].(map[string]interface{}), nil
+	}else{
+		return nil,errors.New("no artist found")
+	}
+
 }
 
 func (r *RelationManager) addArtist(artistSpotifyAccountData map[string]interface{}, user *model.User) (*model.Artist, error) {
@@ -163,7 +171,9 @@ func (r *RelationManager) addArtist(artistSpotifyAccountData map[string]interfac
 
 	if artistTwitterAccountDataErr != nil {
 		//TODO must handle error
-		log.Fatal(artistTwitterAccountDataErr)
+		log.Print(artistTwitterAccountDataErr)
+		return nil, artistTwitterAccountDataErr
+
 	}
 
 	artistAccountData := map[string]interface{}{
@@ -182,9 +192,7 @@ func (r *RelationManager) followArtist(user *model.User, artist *model.Artist) e
 		log.Printf("artistExist")
 		return nil
 	}
-
 	return r.RelationManagerRepository.FollowArtist(user, artist)
-
 }
 
 type RelationManagerRepository interface {

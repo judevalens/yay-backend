@@ -12,6 +12,7 @@ import (
 type AuthApi struct {
 	router *mux.Router
 	authManager *app.AuthManager
+
 }
 
 func NewAuthApi(router *mux.Router,manager *app.AuthManager) *AuthApi{

@@ -35,9 +35,11 @@ type AuthManager struct {
 	ctx        context.Context
 	logger     *zap.Logger
 	AuthManagerRepository
+	AuthSearchService
+
 }
 
-func NewAuthManager(authClient *auth.Client, httpClient http.Client, ctx context.Context, repository AuthManagerRepository) *AuthManager {
+func NewAuthManager(authClient *auth.Client, httpClient http.Client, ctx context.Context, repository AuthManagerRepository,searchService AuthSearchService) *AuthManager {
 	newAuthManager := new(AuthManager)
 
 	logger, _ := zap.NewDevelopment()
@@ -48,6 +50,7 @@ func NewAuthManager(authClient *auth.Client, httpClient http.Client, ctx context
 	newAuthManager.httpClient = httpClient
 	newAuthManager.authClient = authClient
 	newAuthManager.AuthManagerRepository = repository
+	newAuthManager.AuthSearchService = searchService
 	return newAuthManager
 
 }
@@ -258,13 +261,13 @@ func (authenticator *AuthManager) RequestTwitterRequestToken() (map[string]strin
 
 	tokenRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
-	oauthParams := url.Values{
-		"oauth_consumer_key":     []string{helpers.TwitterSecretKey},
-		"oauth_nonce":            []string{strconv.FormatInt(time.Now().Unix(), 10)},
-		"oauth_version":          []string{"1.0"},
-		"oauth_signature_method": []string{"HMAC-SHA1"},
-		"oauth_timestamp":        []string{strconv.FormatInt(time.Now().Unix(), 10)},
-	}
+	oauthParams := url.Values{}
+
+	oauthParams.Add("oauth_consumer_key", helpers.TwitterApiKey)
+	oauthParams.Add("oauth_nonce", strconv.FormatInt(time.Now().Unix(), 10))
+	oauthParams.Add("oauth_version", "1.0")
+	oauthParams.Add("oauth_signature_method", "HMAC-SHA1")
+	oauthParams.Add("oauth_timestamp", strconv.FormatInt(time.Now().Unix(), 10))
 
 	signature, oauthHeader := helpers.OauthSignature("POST", twitterRequestTokenURL, helpers.TwitterSecretKey, "", tokenRequestParams, oauthParams)
 
@@ -347,4 +350,9 @@ type AuthManagerRepository interface {
 	GetUserTwitterOauth(uuid string) (string, string, error)
 	AddUser(user model.User) error
 	UpdateSpotifyOauthInfo(user model.User,accessToken string, accessTokenTimeStamp int64)error
+}
+
+type AuthSearchService interface {
+	IndexUser(user interface{})error
+	 SearchUsers(query string)([]interface{},error)
 }
