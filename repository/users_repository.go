@@ -74,7 +74,7 @@ func (u UserFireStoreRepository) GetUserTwitterOauth(uuid string) (string, strin
 
 func (u UserFireStoreRepository) AddUser(user model.User) error {
 	_, writeError := u.db.Collection("users").Doc(user.GetUserUUID()).Set(context.Background(), map[string]interface{}{
-		"id": user.GetUserUUID(),
+		"id":              user.GetUserUUID(),
 		"spotify_account": user.SpotifyAccount,
 		"twitter_account": user.TwitterAccount,
 	}, firestore.MergeAll)
@@ -88,8 +88,34 @@ func (u UserFireStoreRepository) UpdateSpotifyOauthInfo(user model.User, accessT
 		"spotify_account": map[string]interface{}{
 			"access_token":     accessToken,
 			"token_time_stamp": accessTokenTimeStamp,
-		}},firestore.MergeAll)
+		}}, firestore.MergeAll)
 
 	return updateErr
+
+}
+
+func (u UserFireStoreRepository) UpdateUserTops(user *model.User, userTops map[string]interface{}) error {
+	var err error
+	userProfileCol := u.db.Collection("user_profiles").Doc(user.GetUserUUID())
+	userTopTrack := userProfileCol.Collection("tops").Doc("tracks")
+	userTopArtist := userProfileCol.Collection("tops").Doc("artists")
+
+	topTracks := userTops["tracks"].(map[string]interface{})
+	topArtists := userTops["artists"].(map[string]interface{})
+
+	_, err = userTopArtist.Set(u.ctx, topArtists)
+
+	if err != nil {
+		log.Printf("user top update err : \n%v", err)
+	}
+
+	_, err = userTopTrack.Set(u.ctx, topTracks)
+	if err != nil {
+		log.Printf("user top update err : \n%v", err)
+	}
+
+	return err
+}
+func (u UserFireStoreRepository) GetUserProfile(user *model.User)(map[string]interface{}, error){
 
 }

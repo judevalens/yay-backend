@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"github.com/algolia/algoliasearch-client-go/algolia/search"
+	"log"
 )
 const algoliaToken = "947dbe7381b65d1cff9ba87081814258"
 const appID = "9VD06SK8X2"
@@ -13,7 +14,7 @@ type AlgoliaSearch struct {
 func NewAlgoliaSearch() *AlgoliaSearch{
 	newAlgoliaSearch := new(AlgoliaSearch)
 	newAlgoliaSearch.client = search.NewClient(appID,algoliaToken)
-	newAlgoliaSearch.userIndex = newAlgoliaSearch.client.InitIndex("users")
+	newAlgoliaSearch.userIndex = newAlgoliaSearch.client.InitIndex("yay_users")
 	return newAlgoliaSearch
 }
 
@@ -24,11 +25,19 @@ func (a *AlgoliaSearch) IndexUser(user interface{}) error {
 	return indexingErr
 }
 
-func(a *AlgoliaSearch) SearchUsers(query string) ([]interface{},error){
+func(a *AlgoliaSearch) SearchUsers(query string) ([]map[string]interface{},error){
 	res, resErr := a.userIndex.Search(query)
+	if resErr == nil{
+		log.Printf("alogia res , %v",res.Hits)
+
+	}
+
+
+
 	if resErr != nil{
 		return nil, resErr
 	}else {
-		return res.UserData,nil
+
+		return res.Hits,nil
 	}
 }

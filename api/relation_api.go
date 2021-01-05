@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
@@ -24,6 +25,9 @@ func NewRelationApi(router *mux.Router,manager *app.RelationManager) *RelationAp
 func(relationApi *RelationApi) setRoutes(){
 	r := relationApi.router.HandleFunc("/updateFollowedArtistList", relationApi.updateFollowedArtists).Methods("POST")
 
+
+	relationApi.router.HandleFunc("/searchUser", relationApi.searchUsers).Methods("GET")
+
 	path , _ := r.GetPathTemplate()
 
 	log.Printf("relation route : %v", path)
@@ -43,5 +47,35 @@ func (relationApi *RelationApi) updateFollowedArtists(res http.ResponseWriter,re
 	relationApi.relationManager.UpdateFollowedArtistList(user)
 
 	// I dont really know what to send yet
-	res.Write([]byte(""))
+	_, _ = res.Write([]byte(""))
+}
+func (relationApi *RelationApi) searchUsers(res http.ResponseWriter,req *http.Request){
+	var resByte []byte
+	_ = req.ParseForm()
+
+
+	query := req.Form.Get("query")
+
+
+	log.Printf("got search request : %v",query)
+
+	searchRes, searchResErr := relationApi.relationManager.SearchUsers(query)
+
+	log.Printf("search res \n%v",searchRes)
+	log.Printf("search err \n%v",searchResErr)
+
+	if searchResErr != nil{
+		resByte, _ = json.Marshal(map[string]interface{}{
+			"status": 400,
+			"error":  searchResErr,
+		})
+	}else{
+		resByte, _ = json.Marshal(map[string]interface{}{
+			"status": 200,
+			"users":  searchRes,
+		})
+	}
+
+	_, _ = res.Write(resByte)
+
 }

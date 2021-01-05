@@ -17,13 +17,16 @@ type RelationManager struct {
 	httpClient http.Client
 	*AuthManager
 	RelationManagerRepository
+	UserSearchService
+
 }
 
-func NewRelationManager(httpClient http.Client, authManager *AuthManager, repository RelationManagerRepository) *RelationManager {
+func NewRelationManager(httpClient http.Client, authManager *AuthManager, repository RelationManagerRepository, userSearchService UserSearchService) *RelationManager {
 	newRelationManager := new(RelationManager)
 	newRelationManager.httpClient = httpClient
 	newRelationManager.AuthManager = authManager
 	newRelationManager.RelationManagerRepository = repository
+	newRelationManager.UserSearchService  = userSearchService
 	return newRelationManager
 }
 
@@ -164,6 +167,13 @@ func (r *RelationManager) requestArtistTwitterAccount(artistSpotifyName string, 
 
 }
 
+
+func (r *RelationManager) SearchUsers(query string)([]map[string]interface{},error){
+	log.Printf("searching for user : %v",query)
+	return r.UserSearchService.SearchUsers(query)
+}
+
+
 func (r *RelationManager) addArtist(artistSpotifyAccountData map[string]interface{}, user *model.User) (*model.Artist, error) {
 	artistSpotifyID := artistSpotifyAccountData["id"].(string)
 	artistSpotifyName := artistSpotifyAccountData["name"].(string)
@@ -195,6 +205,11 @@ func (r *RelationManager) followArtist(user *model.User, artist *model.Artist) e
 	return r.RelationManagerRepository.FollowArtist(user, artist)
 }
 
+
+
+
+
+
 type RelationManagerRepository interface {
 	GetFollowedArtist(user *model.User) []*model.Artist
 	IsFollowingArtist(user *model.User, artist *model.Artist) bool
@@ -202,4 +217,9 @@ type RelationManagerRepository interface {
 	GetArtistBySpotifyID(spotifyID string) (*model.Artist, error)
 	GetArtistByTwitterID(spotifyID string) *model.Artist
 	AddArtist(data map[string]interface{}, spotifyID string) error
+}
+
+type UserSearchService interface {
+	IndexUser(user interface{})error
+	SearchUsers(query string)([]map[string]interface{},error)
 }

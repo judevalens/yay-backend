@@ -62,7 +62,7 @@ func main() {
 	authManager := app2.NewAuthManager(authClient, http.Client{}, ctx, authManagerRepository,searchService)
 
 	relationManagerRepository := repository.NewRelationsFireStoreRepository(fireStoreDB, ctx)
-	relationManager := app2.NewRelationManager(http.Client{}, authManager, relationManagerRepository)
+	relationManager := app2.NewRelationManager(http.Client{}, authManager, relationManagerRepository,searchService)
 
 	contentManagerRepository := repository.NewContentManagerFireStoreRepository(fireStoreDB, ctx)
 

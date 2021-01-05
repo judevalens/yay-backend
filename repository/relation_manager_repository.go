@@ -15,19 +15,18 @@ type RelationsFireStoreRepository struct {
 	app.AuthManagerRepository
 }
 
-func (r RelationsFireStoreRepository) GetArtistBySpotifyID(spotifyID string) (*model.Artist,error) {
+func (r RelationsFireStoreRepository) GetArtistBySpotifyID(spotifyID string) (*model.Artist, error) {
 	artistDoc := r.db.Collection("artists").Doc(spotifyID)
 
-	artistDocSnapShot,artistDocSnapShotErr := artistDoc.Get(r.ctx)
+	artistDocSnapShot, artistDocSnapShotErr := artistDoc.Get(r.ctx)
 
 	if artistDocSnapShotErr != nil {
-		return nil,artistDocSnapShotErr
+		return nil, artistDocSnapShotErr
 	}
 
 	artistDocData := artistDocSnapShot.Data()
 
-
-	return model.NewArtist(artistDocData),nil
+	return model.NewArtist(artistDocData), nil
 }
 
 func (r RelationsFireStoreRepository) GetArtistByTwitterID(spotifyID string) *model.Artist {
@@ -41,23 +40,20 @@ func (r RelationsFireStoreRepository) AddArtist(artistAccountData map[string]int
 
 		_, addToArtistErr := artistDoc.Set(r.ctx, artistAccountData)
 
-		if addToArtistErr != nil{
-			log.Printf("addToArtistErr 1 \n%v",artistAccountData)
-			return  addToArtistErr
+		if addToArtistErr != nil {
+			log.Printf("addToArtistErr 1 \n%v", artistAccountData)
+			return addToArtistErr
 		}
 		addToQueueErr := transaction.Set(artistQueueDoc, map[string]interface{}{
 
-			"spotify_id":  spotifyID,
+			"spotify_id": spotifyID,
 			"last_fetch": time.Now().Unix(),
 			"state":      "done",
-			"twitter_id":  artistAccountData["twitter_account"].(map[string]interface{})["id_str"].(string),
+			"twitter_id": artistAccountData["twitter_account"].(map[string]interface{})["id_str"].(string),
 		})
 
 		return addToQueueErr
 	})
-
-
-
 
 }
 
@@ -78,7 +74,7 @@ func (r RelationsFireStoreRepository) GetFollowedArtist(user *model.User) []*mod
 
 	for _, artistSpotifyID := range followedArtistIDList {
 		artist, _ := r.GetArtistBySpotifyID(artistSpotifyID)
-			// TODO must handle error
+		// TODO must handle error
 		if artist != nil {
 			followedArtist = append(followedArtist, artist)
 		}
@@ -93,7 +89,7 @@ func (r RelationsFireStoreRepository) IsFollowingArtist(user *model.User, artist
 	//log.Printf("artist %v",artist)
 
 	artistQuerySnapShot, artistQueryErr := r.db.Collection("users").Where("id", "==", user.GetUserUUID()).Where("followed_artists", "array-contains", artist.GetID()).Documents(r.ctx).GetAll()
-	log.Printf("artists ID : %v, len : %v",artist.GetID(),len(artistQuerySnapShot))
+	log.Printf("artists ID : %v, len : %v", artist.GetID(), len(artistQuerySnapShot))
 
 	if artistQueryErr != nil {
 		log.Print(artistQueryErr)
@@ -133,6 +129,8 @@ func (r RelationsFireStoreRepository) FollowArtist(user *model.User, artist *mod
 
 	return followArtistErr
 }
+
+
 
 func NewRelationsFireStoreRepository(db *firestore.Client, ctx context.Context) *RelationsFireStoreRepository {
 	newUserFireStoreRepository := new(RelationsFireStoreRepository)

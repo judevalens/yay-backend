@@ -32,6 +32,8 @@ func(authApi *AuthApi) setRoutes(){
 
 	authApi.router.HandleFunc("/getTwitterAccessToken", authApi.getTwitterAccessToken).Methods("GET")
 
+	authApi.router.HandleFunc("/getUserProfile", authApi.getTwitterAccessToken).Methods("GET")
+
 	r := authApi.router.HandleFunc("/login", authApi.Login).Methods("POST")
 
 	path , _ := r.GetPathTemplate()
@@ -53,11 +55,23 @@ func (authApi *AuthApi) Login(res http.ResponseWriter,req *http.Request){
 	spotifyLoginData := loginData["spotifyLoginData"].(map[string]interface{})
 	twitterLoginData := loginData["twitterLoginData"].(map[string]interface{})
 
-	loginAnswer, loginAnswerErr := authApi.authManager.AuthenticateUser(spotifyLoginData, twitterLoginData)
+	loginAnswer, newUser, loginAnswerErr := authApi.authManager.AuthenticateUser(spotifyLoginData, twitterLoginData)
 	if loginAnswerErr != nil{
 		// TODO need to handle error
-		log.Fatal(loginAnswerErr)
+		log.Print(loginAnswerErr)
+
+		resByte, _ := json.Marshal(map[string]interface{}{
+				"status": 400,
+				"error": loginAnswerErr,
+		})
+
+		_, _ = res.Write(resByte)
+		return
 	}
+
+	go func() {
+		authApi.authManager.UpdateUserProfile(newUser)
+	}()
 
 	loginAnswerByte, loginAnswerMarshalErr := json.Marshal(loginAnswer)
 
@@ -66,7 +80,7 @@ func (authApi *AuthApi) Login(res http.ResponseWriter,req *http.Request){
 		log.Fatal(loginAnswerMarshalErr)
 	}
 
-	res.Write(loginAnswerByte)
+	_, _ = res.Write(loginAnswerByte)
 }
 
 func (authApi *AuthApi) spotifyLoginHandler(res http.ResponseWriter,req *http.Request)  {
@@ -92,6 +106,7 @@ func (authApi *AuthApi) spotifyLoginHandler(res http.ResponseWriter,req *http.Re
 }
 
 func (authApi *AuthApi) refreshSpotifyToken(res http.ResponseWriter,req *http.Request){
+	// TODO should create a separate handle for soft login and refreshing token
 	log.Printf("new fresh token request %v", req.RemoteAddr)
 
 	userUUID := req.URL.Query().Get("user_uuid")
@@ -109,6 +124,11 @@ func (authApi *AuthApi) refreshSpotifyToken(res http.ResponseWriter,req *http.Re
 		log.Fatal(refreshedAccessTokenResErr)
 	}
 
+	// Whenever the user
+	go func() {
+		authApi.authManager.UpdateUserProfile(user)
+	}()
+
 	log.Printf("result %v",refreshedAccessTokenRes)
 	refreshTokenByte, refreshTokenMarshalErr := json.Marshal(refreshedAccessTokenRes)
 
@@ -118,7 +138,7 @@ func (authApi *AuthApi) refreshSpotifyToken(res http.ResponseWriter,req *http.Re
 
 	log.Printf("sending refreshed token to client \n %v", refreshedAccessTokenRes)
 
-	res.Write(refreshTokenByte)
+	_, _ = res.Write(refreshTokenByte)
 }
 
 func (authApi *AuthApi) geTwitterRequestToken(res http.ResponseWriter,req *http.Request){
@@ -160,6 +180,19 @@ func (authApi *AuthApi) getTwitterAccessToken(res http.ResponseWriter,req *http.
 
 	res.Write(accessTokenAnswerByte)
 }
+
+func (authApi *AuthApi) getUserProfile(res http.ResponseWriter,req *http.Request){
+	var err error
+
+	_ = req.ParseForm()
+
+	userID := req.Form.Get("user_id")
+	user := authApi.authManager.GetUserByUUID(userID)
+
+	authApi.
+
+}
+
 
 func(authApi *AuthApi) GetRouter(path string) *mux.Router{
 	return authApi.router.Path(path).Subrouter()

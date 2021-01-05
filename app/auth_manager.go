@@ -25,7 +25,6 @@ const (
 )
 
 const (
-
 	TwitterOauthCallBack = "https://127.0.0.1/twitterCallback/"
 )
 
@@ -36,10 +35,9 @@ type AuthManager struct {
 	logger     *zap.Logger
 	AuthManagerRepository
 	AuthSearchService
-
 }
 
-func NewAuthManager(authClient *auth.Client, httpClient http.Client, ctx context.Context, repository AuthManagerRepository,searchService AuthSearchService) *AuthManager {
+func NewAuthManager(authClient *auth.Client, httpClient http.Client, ctx context.Context, repository AuthManagerRepository, searchService AuthSearchService) *AuthManager {
 	newAuthManager := new(AuthManager)
 
 	logger, _ := zap.NewDevelopment()
@@ -55,7 +53,7 @@ func NewAuthManager(authClient *auth.Client, httpClient http.Client, ctx context
 
 }
 
-func (authenticator *AuthManager) AuthenticateUser(spotifyAccountData, twitterAccountData map[string]interface{}) (map[string]interface{}, error) {
+func (authenticator *AuthManager) AuthenticateUser(spotifyAccountData, twitterAccountData map[string]interface{}) (map[string]interface{}, *model.User, error) {
 
 	userEmail := spotifyAccountData["user_email"].(string)
 
@@ -72,26 +70,28 @@ func (authenticator *AuthManager) AuthenticateUser(spotifyAccountData, twitterAc
 
 	user := model.NewUser(userRecord.UID, spotifyAccountData, twitterAccountData)
 
-		log.Printf("spotify account data \n %v" ,spotifyAccountData)
+	log.Printf("spotify account data \n %v", spotifyAccountData)
 	userIsAdded := authenticator.AddUser(*user)
 	if userIsAdded != nil {
-		return nil, errors.New("failed register user")
+		return nil, nil, errors.New("failed register user")
 	}
 	_ = authenticator.IndexUser(map[string]string{
-		"spotify_name": user.SpotifyAccount["display_name"].(string),
-		"twitter_name": user.TwitterAccount["screen_name"].(string),
-		"user_id": user.GetUserUUID(),
+		"spotify_name":         user.SpotifyAccount["display_name"].(string),
+		"twitter_name":         user.TwitterAccount["screen_name"].(string),
+		"user_id":              user.GetUserUUID(),
+		"objectID":             user.GetUserUUID(),
+		"user_spotify_profile": user.SpotifyAccount["profile_picture"].(string),
 	})
 	customToken, customTokenErr := authenticator.authClient.CustomToken(authenticator.ctx, user.GetUserUUID())
 
 	if customTokenErr != nil {
-		return nil, errors.New("failed to create custom token")
+		return nil, nil, errors.New("failed to create custom token")
 
 	}
 	return map[string]interface{}{
 		"status_code":  200,
 		"custom_token": customToken,
-	}, nil
+	}, user, nil
 
 }
 
@@ -111,6 +111,13 @@ func (authenticator *AuthManager) LoginWithSpotify(spotifyRecCode string) (map[s
 		return nil, tokenReqErr
 	}
 
+	var userPictureUrl string
+
+	if userInfo["images"] != nil {
+		pictures := userInfo["images"].([]interface{})
+		userPictureUrl = pictures[0].(map[string]interface{})["url"].(string)
+	}
+
 	return map[string]interface{}{
 		"status_code":      200,
 		"access_token":     tokenReqRes["access_token"].(string),
@@ -120,7 +127,8 @@ func (authenticator *AuthManager) LoginWithSpotify(spotifyRecCode string) (map[s
 		"token_time_stamp": tokenReqRes["token_time_stamp"],
 		"user_email":       userInfo["email"].(string),
 		//"picture": (userInfo["images"].(map[string]interface{}))["url"].(string),
-		"profile": userInfo["href"].(string),
+		"profile":         userInfo["href"].(string),
+		"profile_picture": userPictureUrl,
 	}, nil
 }
 
@@ -157,17 +165,17 @@ func (authenticator *AuthManager) RequestSpotifyAccessToken(code string) (map[st
 
 func (authenticator *AuthManager) GetAccessTokenMap(user *model.User) (map[string]interface{}, error) {
 
-	tokenTimeStamp, isFloat := user.GetSpotifyAccount()["token_time_stamp"].(int64)
+	tokenTimeStamp, isInt := user.GetSpotifyAccount()["token_time_stamp"].(int64)
 
-	if isFloat{
-		tokenTimeStamp  = int64(user.GetSpotifyAccount()["token_time_stamp"].(float64))
+	if !isInt {
+		tokenTimeStamp = int64(user.GetSpotifyAccount()["token_time_stamp"].(float64))
 	}
 
-	lastFetchedTime := time.Unix(tokenTimeStamp,0)
+	lastFetchedTime := time.Unix(tokenTimeStamp, 0)
 
 	elapsedTime := time.Now().Sub(lastFetchedTime)
 
-	maxTime := time.Duration(float64(time.Minute.Nanoseconds() * 60)*0.9)
+	maxTime := time.Duration(float64(time.Minute.Nanoseconds()*60) * 0.9)
 	if elapsedTime.Seconds() >= maxTime.Seconds() {
 		refreshedAccessTokenMap, refreshedTokenErr := authenticator.RequestSpotifyRefreshedAccessToken(user.GetSpotifyAccount()["refresh_token"].(string))
 
@@ -177,9 +185,9 @@ func (authenticator *AuthManager) GetAccessTokenMap(user *model.User) (map[strin
 
 		}
 
-		log.Printf("token_time_stamp %v",refreshedAccessTokenMap["token_time_stamp"].(int64) )
+		log.Printf("token_time_stamp %v", refreshedAccessTokenMap["token_time_stamp"].(int64))
 
-		updateErr  := authenticator.UpdateSpotifyOauthInfo(*user, refreshedAccessTokenMap["access_token"].(string), refreshedAccessTokenMap["token_time_stamp"].(int64))
+		updateErr := authenticator.UpdateSpotifyOauthInfo(*user, refreshedAccessTokenMap["access_token"].(string), refreshedAccessTokenMap["token_time_stamp"].(int64))
 
 		if updateErr != nil {
 			log.Fatal(updateErr)
@@ -193,11 +201,11 @@ func (authenticator *AuthManager) GetAccessTokenMap(user *model.User) (map[strin
 }
 
 func (authenticator *AuthManager) GetAccessToken(user *model.User) (string, error) {
-	accessTokenMap , accessTokenMapErr := authenticator.GetAccessTokenMap(user)
-	if accessTokenMapErr != nil{
+	accessTokenMap, accessTokenMapErr := authenticator.GetAccessTokenMap(user)
+	if accessTokenMapErr != nil {
 		return "", accessTokenMapErr
 	}
-	return accessTokenMap["access_token"].(string),nil
+	return accessTokenMap["access_token"].(string), nil
 }
 
 func (authenticator *AuthManager) RequestSpotifyRefreshedAccessToken(refreshToken string) (map[string]interface{}, error) {
@@ -219,7 +227,7 @@ func (authenticator *AuthManager) RequestSpotifyRefreshedAccessToken(refreshToke
 	authorizationCodeB64 := "Basic " + base64.StdEncoding.EncodeToString([]byte(authorizationCode))
 	tokenReq.Header.Add("Authorization", authorizationCodeB64)
 
-	log.Printf("body :\n%v", tokenReqBody.Encode())
+	//log.Printf("body :\n%v", tokenReqBody.Encode())
 
 	tokenReqResponse, _ := authenticator.httpClient.Do(tokenReq)
 
@@ -228,7 +236,7 @@ func (authenticator *AuthManager) RequestSpotifyRefreshedAccessToken(refreshToke
 	log.Printf("token response , status code %v,  body : %v", tokenReqResponse.StatusCode, string(resBody))
 	if tokenReqResponse.StatusCode == 200 {
 		var tokenResponse interface{}
-		json.Unmarshal(resBody, &tokenResponse)
+		_ = json.Unmarshal(resBody, &tokenResponse)
 		tokenResponseMap := tokenResponse.(map[string]interface{})
 		tokenResponseMap["token_time_stamp"] = time.Now().Unix()
 		return tokenResponseMap, nil
@@ -354,6 +362,79 @@ func (authenticator *AuthManager) GetTwitterAccessToken(uuid string) (string, st
 	return authenticator.GetUserTwitterOauth(uuid)
 }
 
+// SHOULD probably move the subsequent function into another file
+func (authenticator *AuthManager) requestUserTop(user *model.User, topType string) (map[string]interface{}, error) {
+	topUrl := "https://api.spotify.com/v1/me/top/" + topType
+
+	topReq, _ := http.NewRequest("GET", topUrl, nil)
+
+	params := url.Values{}
+	params.Add("limit", "20")
+
+	topReq.URL.RawQuery = params.Encode()
+
+	accessToken, accessTokenErr := authenticator.GetAccessToken(user)
+
+	if accessTokenErr != nil {
+	}
+
+	topReq.Header.Set("Authorization", "Bearer "+accessToken)
+
+	topReqRes, _ := authenticator.httpClient.Do(topReq)
+
+	topResByte, topResErr := ioutil.ReadAll(topReqRes.Body)
+
+	if topResErr != nil {
+
+	}
+	var topRes map[string]interface{}
+
+	topUnmarshalErr := json.Unmarshal(topResByte, &topRes)
+
+	if topResErr != nil {
+		log.Print(topUnmarshalErr)
+	}
+
+	log.Printf("status code  : %v, url : %v, user top, \n %v", topReqRes.Status, topReq.URL.String(), string(topResByte))
+
+	return topRes, nil
+}
+
+func (authenticator *AuthManager) UpdateUserProfile(user *model.User) {
+	var err error
+
+	var userTops = make(map[string]interface{})
+	userTops["tracks"], err = authenticator.requestUserTop(user, "tracks")
+	userTops["artists"], err = authenticator.requestUserTop(user, "artists")
+
+	if err != nil {
+	}
+
+	log.Printf("user tops, \n %v", userTops)
+
+	authenticator.UpdateUserTops(user, userTops)
+
+}
+
+func (authenticator *AuthManager) getUserProfile(user *model.User) (map[string]interface{}, error) {
+	var err error
+	var profile = make(map[string]interface{})
+
+	userProfile, err := authenticator.GetUserProfile(user)
+
+	if err != nil {
+
+	}
+
+	profile["spotify_user_name"] = user.SpotifyAccount["display_name"]
+	profile["profile_picture"] = user.SpotifyAccount["profile_picture"]
+	profile["twitter_user_name"] = user.TwitterAccount["screen_name"]
+	profile["twitter_id"] = user.TwitterAccount["user_id"]
+	profile["extended_profile"] = userProfile
+
+	return userProfile, nil
+}
+
 type AuthManagerRepository interface {
 	GetUserBySpotifyID(spotifyID string) *model.User
 	GetUserByTwitterID(twitterID string) *model.User
@@ -361,10 +442,12 @@ type AuthManagerRepository interface {
 	GetUserByUUID(uuid string) (*model.User, error)
 	GetUserTwitterOauth(uuid string) (string, string, error)
 	AddUser(user model.User) error
-	UpdateSpotifyOauthInfo(user model.User,accessToken string, accessTokenTimeStamp int64)error
+	UpdateSpotifyOauthInfo(user model.User, accessToken string, accessTokenTimeStamp int64) error
+	UpdateUserTops(user *model.User, userTops map[string]interface{}) (int, int)
+	GetUserProfile(user *model.User) (map[string]interface{}, error)
 }
 
 type AuthSearchService interface {
-	IndexUser(user interface{})error
-	 SearchUsers(query string)([]interface{},error)
+	IndexUser(user interface{}) error
+	SearchUsers(query string) ([]map[string]interface{}, error)
 }

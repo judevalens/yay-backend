@@ -147,6 +147,9 @@ func (a *ContentManager) TweetFlow(user *model.User, trackInfo map[string]interf
 	return tweetFlow, nil
 }
 
+
+
+
 func (a *ContentManager) startSelection() {
 	i := 0
 	a.artistFeedPuller.Start()
