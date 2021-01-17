@@ -115,7 +115,9 @@ func (authenticator *AuthManager) LoginWithSpotify(spotifyRecCode string) (map[s
 
 	if userInfo["images"] != nil {
 		pictures := userInfo["images"].([]interface{})
-		userPictureUrl = pictures[0].(map[string]interface{})["url"].(string)
+		if len(pictures) > 0 {
+			userPictureUrl = pictures[0].(map[string]interface{})["url"].(string)
+		}
 	}
 
 	return map[string]interface{}{
@@ -412,25 +414,18 @@ func (authenticator *AuthManager) UpdateUserProfile(user *model.User) {
 
 	log.Printf("user tops, \n %v", userTops)
 
-	authenticator.UpdateUserTops(user, userTops)
+	_ = authenticator.UpdateUserTops(user, userTops)
 
 }
 
 func (authenticator *AuthManager) getUserProfile(user *model.User) (map[string]interface{}, error) {
 	var err error
-	var profile = make(map[string]interface{})
 
 	userProfile, err := authenticator.GetUserProfile(user)
 
 	if err != nil {
 
 	}
-
-	profile["spotify_user_name"] = user.SpotifyAccount["display_name"]
-	profile["profile_picture"] = user.SpotifyAccount["profile_picture"]
-	profile["twitter_user_name"] = user.TwitterAccount["screen_name"]
-	profile["twitter_id"] = user.TwitterAccount["user_id"]
-	profile["extended_profile"] = userProfile
 
 	return userProfile, nil
 }
@@ -443,7 +438,7 @@ type AuthManagerRepository interface {
 	GetUserTwitterOauth(uuid string) (string, string, error)
 	AddUser(user model.User) error
 	UpdateSpotifyOauthInfo(user model.User, accessToken string, accessTokenTimeStamp int64) error
-	UpdateUserTops(user *model.User, userTops map[string]interface{}) (int, int)
+	UpdateUserTops(user *model.User, userTops map[string]interface{}) error
 	GetUserProfile(user *model.User) (map[string]interface{}, error)
 }
 

@@ -138,7 +138,7 @@ func (a *ContentManager) TweetFlow(user *model.User, trackInfo map[string]interf
 		if tweetFlowErr != nil {
 			//TODO need to handle error
 			log.Print(tweetsErr)
-			return nil,tweetFlowErr
+			return nil, tweetFlowErr
 		}
 	}
 
@@ -146,9 +146,6 @@ func (a *ContentManager) TweetFlow(user *model.User, trackInfo map[string]interf
 
 	return tweetFlow, nil
 }
-
-
-
 
 func (a *ContentManager) startSelection() {
 	i := 0

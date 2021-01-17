@@ -79,6 +79,16 @@ func (u UserFireStoreRepository) AddUser(user model.User) error {
 		"twitter_account": user.TwitterAccount,
 	}, firestore.MergeAll)
 
+	// SETTING THE USER PROFILE
+	_, _ = u.db.Collection("user_profiles").Doc(user.GetUserUUID()).Set(u.ctx, map[string]interface{}{
+
+		"spotify_user_name":  user.SpotifyAccount["display_name"],
+		"profile_picture":  user.SpotifyAccount["profile_picture"],
+		"twitter_user_name":  user.TwitterAccount["screen_name"],
+		"twitter_id":  user.TwitterAccount["user_id"],
+		"user_desc":  "",
+	},firestore.MergeAll)
+
 	return writeError
 }
 
@@ -117,5 +127,29 @@ func (u UserFireStoreRepository) UpdateUserTops(user *model.User, userTops map[s
 	return err
 }
 func (u UserFireStoreRepository) GetUserProfile(user *model.User)(map[string]interface{}, error){
+	var userProfile =  make(map[string]interface{})
+	userProfileDoc := u.db.Collection("user_profiles").Doc(user.GetUserUUID())
+
+	topArtists, topArtistsErr := userProfileDoc.Collection("tops").Doc("artists").Get(u.ctx)
+
+	topTracks, topTracksErr := userProfileDoc.Collection("tops").Doc("tracks").Get(u.ctx)
+
+	if topTracksErr == nil{
+		userProfile["topTracks"] = topTracks.Data()
+
+	}
+
+	if topArtistsErr == nil{
+		userProfile["topArtists"] = topArtists.Data()
+	}
+
+	userProfileSnapShot, userProfileSnapShotErr := userProfileDoc.Get(u.ctx)
+
+	if userProfileSnapShotErr == nil{
+		userProfile["basic"] = userProfileSnapShot.Data()
+	}
+
+
+	return userProfile,nil
 
 }

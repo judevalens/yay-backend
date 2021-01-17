@@ -18,7 +18,6 @@ type RelationManager struct {
 	*AuthManager
 	RelationManagerRepository
 	UserSearchService
-
 }
 
 func NewRelationManager(httpClient http.Client, authManager *AuthManager, repository RelationManagerRepository, userSearchService UserSearchService) *RelationManager {
@@ -26,7 +25,7 @@ func NewRelationManager(httpClient http.Client, authManager *AuthManager, reposi
 	newRelationManager.httpClient = httpClient
 	newRelationManager.AuthManager = authManager
 	newRelationManager.RelationManagerRepository = repository
-	newRelationManager.UserSearchService  = userSearchService
+	newRelationManager.UserSearchService = userSearchService
 	return newRelationManager
 }
 
@@ -98,7 +97,7 @@ func (r *RelationManager) UpdateFollowedArtistList(user *model.User) {
 
 		followArtistError := r.followArtist(user, artist)
 
-		if followArtistError != nil{
+		if followArtistError != nil {
 			//TODO must handle error
 			log.Print(followArtistError)
 		}
@@ -152,7 +151,7 @@ func (r *RelationManager) requestArtistTwitterAccount(artistSpotifyName string, 
 
 	searchedArtistUnmarshalErr := json.Unmarshal(searchedArtistBytes, &searchedArtistJson)
 
-	if searchedArtistUnmarshalErr != nil{
+	if searchedArtistUnmarshalErr != nil {
 		// TODO handle error
 		log.Fatal(searchedArtistUnmarshalErr)
 	}
@@ -161,18 +160,16 @@ func (r *RelationManager) requestArtistTwitterAccount(artistSpotifyName string, 
 
 	if len(searchResult) > 0 {
 		return searchResult[0].(map[string]interface{}), nil
-	}else{
-		return nil,errors.New("no artist found")
+	} else {
+		return nil, errors.New("no artist found")
 	}
 
 }
 
-
-func (r *RelationManager) SearchUsers(query string)([]map[string]interface{},error){
-	log.Printf("searching for user : %v",query)
+func (r *RelationManager) SearchUsers(query string) ([]map[string]interface{}, error) {
+	log.Printf("searching for user : %v", query)
 	return r.UserSearchService.SearchUsers(query)
 }
-
 
 func (r *RelationManager) addArtist(artistSpotifyAccountData map[string]interface{}, user *model.User) (*model.Artist, error) {
 	artistSpotifyID := artistSpotifyAccountData["id"].(string)
@@ -205,10 +202,27 @@ func (r *RelationManager) followArtist(user *model.User, artist *model.Artist) e
 	return r.RelationManagerRepository.FollowArtist(user, artist)
 }
 
+func (r *RelationManager) FollowUser(userA, userB *model.User)  error {
+	var err error
+
+	//TODO this whole process should be a transaction
+
+	err = r.RelationManagerRepository.FollowUser(userA, userB)
+
+	if err != nil{
+		return err
+	}
+	err = r.RelationManagerRepository.FollowUser(userB, userA)
+	if err != nil{
+		return err
+	}
+	return nil
+}
+func (r *RelationManager) IsFollowing(userA, userB *model.User) (bool, error) {
 
 
-
-
+	return r.RelationManagerRepository.IsFollowingUser(userA, userB)
+}
 
 type RelationManagerRepository interface {
 	GetFollowedArtist(user *model.User) []*model.Artist
@@ -217,9 +231,11 @@ type RelationManagerRepository interface {
 	GetArtistBySpotifyID(spotifyID string) (*model.Artist, error)
 	GetArtistByTwitterID(spotifyID string) *model.Artist
 	AddArtist(data map[string]interface{}, spotifyID string) error
+	IsFollowingUser(userA, userB *model.User) (bool, error)
+	FollowUser(userA, userB *model.User) error
 }
 
 type UserSearchService interface {
-	IndexUser(user interface{})error
-	SearchUsers(query string)([]map[string]interface{},error)
+	IndexUser(user interface{}) error
+	SearchUsers(query string) ([]map[string]interface{}, error)
 }

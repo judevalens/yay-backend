@@ -32,7 +32,7 @@ func(authApi *AuthApi) setRoutes(){
 
 	authApi.router.HandleFunc("/getTwitterAccessToken", authApi.getTwitterAccessToken).Methods("GET")
 
-	authApi.router.HandleFunc("/getUserProfile", authApi.getTwitterAccessToken).Methods("GET")
+	authApi.router.HandleFunc("/getUserProfile", authApi.getUserProfile).Methods("GET")
 
 	r := authApi.router.HandleFunc("/login", authApi.Login).Methods("POST")
 
@@ -183,13 +183,34 @@ func (authApi *AuthApi) getTwitterAccessToken(res http.ResponseWriter,req *http.
 
 func (authApi *AuthApi) getUserProfile(res http.ResponseWriter,req *http.Request){
 	var err error
+	var userProfile map[string]interface{}
 
 	_ = req.ParseForm()
 
-	userID := req.Form.Get("user_id")
-	user := authApi.authManager.GetUserByUUID(userID)
+	log.Print("retrieving user profile")
 
-	authApi.
+	userID := req.Form.Get("user_id")
+	user, err := authApi.authManager.GetUserByUUID(userID)
+
+	if err != nil{
+		log.Fatal(err)
+	}
+
+	userProfile, err = authApi.authManager.GetUserProfile(user)
+	log.Printf("user complete profile, \n%v",userProfile)
+
+	if err != nil{
+		log.Fatal(err)
+
+	}
+
+	userProfileByte, err := json.Marshal(userProfile)
+
+	if err != nil{
+		log.Fatal(err)
+	}
+
+	_, _ = res.Write(userProfileByte)
 
 }
 

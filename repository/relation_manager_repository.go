@@ -15,6 +15,28 @@ type RelationsFireStoreRepository struct {
 	app.AuthManagerRepository
 }
 
+func (r RelationsFireStoreRepository) IsFollowingUser(userA, userB *model.User) (bool, error) {
+
+	_,  isFollowingErr := r.db.Collection("users").Doc(userA.GetUserUUID()).Collection("followed_users").Doc(userB.GetUserUUID()).Get(r.ctx)
+
+	if isFollowingErr != nil{
+		return false,isFollowingErr
+	}
+
+	return true, nil
+
+}
+
+func (r RelationsFireStoreRepository) FollowUser(userA, userB *model.User) error {
+
+	_, followUserErr := r.db.Collection("users").Doc(userB.GetUserUUID()).Collection("followed_users").Doc(userA.GetUserUUID()).Set(r.ctx,
+		map[string]interface{}{
+			"following": true,
+		})
+
+	return followUserErr
+}
+
 func (r RelationsFireStoreRepository) GetArtistBySpotifyID(spotifyID string) (*model.Artist, error) {
 	artistDoc := r.db.Collection("artists").Doc(spotifyID)
 
@@ -129,8 +151,6 @@ func (r RelationsFireStoreRepository) FollowArtist(user *model.User, artist *mod
 
 	return followArtistErr
 }
-
-
 
 func NewRelationsFireStoreRepository(db *firestore.Client, ctx context.Context) *RelationsFireStoreRepository {
 	newUserFireStoreRepository := new(RelationsFireStoreRepository)
