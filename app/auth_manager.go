@@ -18,11 +18,7 @@ import (
 	"yaybackEnd/model"
 )
 
-const (
-	SpotifyAccessTokenRedirectUri = "http://com.example.yay/"
-	SpotifyClientId               = "c32f7f7b46e14062ba2aea1b462415c9"
-	SpotifyClientSecret           = "4bf8bb4cb9964ec8bb9d900bc9bc5fb3"
-)
+
 
 const (
 	TwitterOauthCallBack = "https://127.0.0.1/twitterCallback/"
@@ -285,13 +281,13 @@ func (authenticator *AuthManager) RequestTwitterRequestToken() (map[string]strin
 
 	oauthParams := url.Values{}
 
-	oauthParams.Add("oauth_consumer_key", helpers.TwitterApiKey)
+	oauthParams.Add("oauth_consumer_key", TwitterApiKey)
 	oauthParams.Add("oauth_nonce", strconv.FormatInt(time.Now().Unix(), 10))
 	oauthParams.Add("oauth_version", "1.0")
 	oauthParams.Add("oauth_signature_method", "HMAC-SHA1")
 	oauthParams.Add("oauth_timestamp", strconv.FormatInt(time.Now().Unix(), 10))
 
-	signature, oauthHeader := helpers.OauthSignature("POST", twitterRequestTokenURL, helpers.TwitterSecretKey, "", tokenRequestParams, oauthParams)
+	signature, oauthHeader := helpers.OauthSignature("POST", twitterRequestTokenURL, TwitterSecretKey, "", tokenRequestParams, oauthParams)
 
 	tokenRequest.Header.Add("Authorization", oauthHeader)
 	requestedToken, _ := authenticator.httpClient.Do(tokenRequest)

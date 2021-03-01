@@ -4,6 +4,7 @@ import (
 	"cloud.google.com/go/firestore"
 	"context"
 	"github.com/gorilla/mux"
+	"google.golang.org/api/option"
 	"log"
 	"net/http"
 	"yaybackEnd/api"
@@ -39,9 +40,10 @@ func (a App) setHandler(path string, handlerFunc http.HandlerFunc) {
 
 func main() {
 
-	app, err := firebase.NewApp(context.Background(), conf)
+	opt := option.WithCredentialsFile("yay-music-firebase-adminsdk-c31yg-77d2819dfa.json")
+	app, err := firebase.NewApp(context.Background(), conf, opt)
 	if err != nil {
-		log.Fatalf("authClientErr initializing app: %v\n", err)
+		 log.Fatalf("error initializing app: %v", err)
 	}
 	authClient, authClientErr := app.Auth(ctx)
 

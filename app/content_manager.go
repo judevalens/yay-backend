@@ -46,7 +46,7 @@ func (a *ContentManager) searchTweets(userOauthToken, userOauthSecret, query str
 	params := url.Values{}
 	params.Add("q", query)
 	params.Add("count", "30")
-	_, oauthHeader := helpers.OauthSignature("GET", twitterSearchUrl, helpers.TwitterSecretKey, userOauthSecret, params, helpers.GetAuthParams(map[string]string{
+	_, oauthHeader := helpers.OauthSignature("GET", twitterSearchUrl, TwitterSecretKey, userOauthSecret, params, helpers.GetAuthParams(map[string]string{
 		"oauth_token": userOauthToken,
 	}))
 	twitterSearchReq, twitterSearchReqErr := http.NewRequest("GET", twitterSearchUrl, nil)
@@ -218,7 +218,7 @@ func (f *FeedPoller) poll(artistQueueItem model.ArtistFeedQueue) ([]map[string]i
 
 	params.Add("user_id", artistTwitterID)
 
-	_, oauthHeader := helpers.OauthSignature("GET", twitterTimeLineUrl, helpers.TwitterSecretKey, "", params, helpers.GetAuthParams(nil))
+	_, oauthHeader := helpers.OauthSignature("GET", twitterTimeLineUrl, TwitterSecretKey, "", params, helpers.GetAuthParams(nil))
 
 	artistTimeLineReq, artistTimeLineReqErr_ := http.NewRequest("GET", twitterTimeLineUrl, nil)
 	if artistTimeLineReqErr_ != nil {
