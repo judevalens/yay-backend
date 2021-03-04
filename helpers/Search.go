@@ -1,7 +1,7 @@
 package helpers
 
 import (
-	"github.com/algolia/algoliasearch-client-go/algolia/search"
+	"github.com/algolia/algoliasearch-client-go/v3/algolia/search"
 	"log"
 )
 const algoliaToken = "947dbe7381b65d1cff9ba87081814258"
