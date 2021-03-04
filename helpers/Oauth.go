@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"yaybackEnd/app"
 )
 
 
@@ -107,7 +106,7 @@ func GetAuthParams(params map[string]string) url.Values{
 		}
 	}
 
-	oauthParams.Add("oauth_consumer_key", app.TwitterApiKey)
+	oauthParams.Add("oauth_consumer_key", TwitterApiKey)
 	oauthParams.Add("oauth_nonce", strconv.FormatInt(time.Now().Unix(), 10))
 	oauthParams.Add("oauth_version", "1.0")
 	oauthParams.Add("oauth_signature_method", "HMAC-SHA1")

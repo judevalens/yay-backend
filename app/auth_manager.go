@@ -136,9 +136,9 @@ func (authenticator *AuthManager) RequestSpotifyAccessToken(code string) (map[st
 	tokenReqBody := url.Values{}
 	tokenReqBody.Add("code", code)
 	tokenReqBody.Add("grant_type", "authorization_code")
-	tokenReqBody.Add("redirect_uri", SpotifyAccessTokenRedirectUri)
-	tokenReqBody.Add("client_id", SpotifyClientId)
-	tokenReqBody.Add("client_secret", SpotifyClientSecret)
+	tokenReqBody.Add("redirect_uri", helpers.SpotifyAccessTokenRedirectUri)
+	tokenReqBody.Add("client_id", helpers.SpotifyClientId)
+	tokenReqBody.Add("client_secret", helpers.SpotifyClientSecret)
 
 	tokenReq, _ := http.NewRequest("POST", tokenReqURL, strings.NewReader(tokenReqBody.Encode()))
 	tokenReq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -213,15 +213,15 @@ func (authenticator *AuthManager) RequestSpotifyRefreshedAccessToken(refreshToke
 	tokenReqBody := url.Values{}
 	tokenReqBody.Add("refresh_token", refreshToken)
 	tokenReqBody.Add("grant_type", "refresh_token")
-	tokenReqBody.Add("client_id", SpotifyClientId)
-	tokenReqBody.Add("client_secret", SpotifyClientSecret)
+	tokenReqBody.Add("client_id", helpers.SpotifyClientId)
+	tokenReqBody.Add("client_secret", helpers.SpotifyClientSecret)
 
 	tokenReq, _ := http.NewRequest("POST", tokenReqURL, strings.NewReader(tokenReqBody.Encode()))
 
 	tokenReq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	tokenReq.Header.Add("Content-Length", strconv.Itoa(len(tokenReqBody.Encode())))
 
-	authorizationCode := SpotifyClientId + ":" + SpotifyClientSecret
+	authorizationCode := helpers.SpotifyClientId + ":" + helpers.SpotifyClientSecret
 	authorizationCodeB64 := "Basic " + base64.StdEncoding.EncodeToString([]byte(authorizationCode))
 	tokenReq.Header.Add("Authorization", authorizationCodeB64)
 
@@ -281,13 +281,13 @@ func (authenticator *AuthManager) RequestTwitterRequestToken() (map[string]strin
 
 	oauthParams := url.Values{}
 
-	oauthParams.Add("oauth_consumer_key", TwitterApiKey)
+	oauthParams.Add("oauth_consumer_key", helpers.TwitterApiKey)
 	oauthParams.Add("oauth_nonce", strconv.FormatInt(time.Now().Unix(), 10))
 	oauthParams.Add("oauth_version", "1.0")
 	oauthParams.Add("oauth_signature_method", "HMAC-SHA1")
 	oauthParams.Add("oauth_timestamp", strconv.FormatInt(time.Now().Unix(), 10))
 
-	signature, oauthHeader := helpers.OauthSignature("POST", twitterRequestTokenURL, TwitterSecretKey, "", tokenRequestParams, oauthParams)
+	signature, oauthHeader := helpers.OauthSignature("POST", twitterRequestTokenURL, helpers.TwitterSecretKey, "", tokenRequestParams, oauthParams)
 
 	tokenRequest.Header.Add("Authorization", oauthHeader)
 	requestedToken, _ := authenticator.httpClient.Do(tokenRequest)
