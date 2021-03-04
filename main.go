@@ -3,10 +3,12 @@ package main
 import (
 	"cloud.google.com/go/firestore"
 	"context"
+	"fmt"
 	"github.com/gorilla/mux"
 	"google.golang.org/api/option"
 	"log"
 	"net/http"
+	"os"
 	"yaybackEnd/api"
 	app2 "yaybackEnd/app"
 	"yaybackEnd/helpers"
@@ -18,7 +20,9 @@ import (
 	_ "google.golang.org/api/option"
 )
 
-var addr string = ":8000"
+var port = os.Getenv("PORT")
+
+var addr string = ":" + port
 
 var ctx = context.Background()
 var conf = &firebase.Config{
@@ -39,11 +43,13 @@ func (a App) setHandler(path string, handlerFunc http.HandlerFunc) {
 }
 
 func main() {
+	port = os.Getenv("PORT")
+	fmt.Printf("add : %s\n", port)
 
 	opt := option.WithCredentialsFile("yay-music-firebase-adminsdk-c31yg-77d2819dfa.json")
 	app, err := firebase.NewApp(context.Background(), conf, opt)
 	if err != nil {
-		 log.Fatalf("error initializing app: %v", err)
+		log.Fatalf("error initializing app: %v", err)
 	}
 	authClient, authClientErr := app.Auth(ctx)
 
@@ -61,10 +67,10 @@ func main() {
 
 	var router = mux.NewRouter()
 	authManagerRepository := repository.NewUserFireStoreRepository(fireStoreDB, ctx)
-	authManager := app2.NewAuthManager(authClient, http.Client{}, ctx, authManagerRepository,searchService)
+	authManager := app2.NewAuthManager(authClient, http.Client{}, ctx, authManagerRepository, searchService)
 
 	relationManagerRepository := repository.NewRelationsFireStoreRepository(fireStoreDB, ctx)
-	relationManager := app2.NewRelationManager(http.Client{}, authManager, relationManagerRepository,searchService)
+	relationManager := app2.NewRelationManager(http.Client{}, authManager, relationManagerRepository, searchService)
 
 	contentManagerRepository := repository.NewContentManagerFireStoreRepository(fireStoreDB, ctx)
 
