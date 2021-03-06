@@ -86,6 +86,6 @@ func main() {
 		log.Printf("test")
 	})
 
-	err = http.ListenAndServeTLS(addr, "cert.pem", "key.pem", router)
+	err = http.ListenAndServe(addr, router)
 	log.Fatal(err)
 }
